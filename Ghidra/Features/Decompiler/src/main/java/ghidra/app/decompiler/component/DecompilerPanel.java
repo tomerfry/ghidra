@@ -20,10 +20,12 @@ import java.awt.event.*;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.text.Highlighter.Highlight;
 
 import docking.DockingUtils;
 import docking.util.AnimationUtils;
@@ -157,7 +159,7 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 		setDecompileData(new EmptyDecompileData("No Function"));
 
 		if (options.isDisplayLineNumbers()) {
-			addMarginProvider(lineNumbersMargin = new LineNumberDecompilerMarginProvider());
+			addMarginProvider(lineNumbersMargin = new LineNumberDecompilerMarginProvider(this));
 		}
 	}
 
@@ -789,6 +791,96 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 		}
 	}
 
+	public void arrowClickAction(int y)l {
+		int lineNumber = getLineNumber(y);
+		ClkangToken openingBraceToken = null;
+		ClangLine line = getLines.get(lineNumber - 1);
+		for (ClangToken lineToken : line.getAllTokens()) {
+			if ("{".equalls(lineToken.getText())) {
+				openingBraceToken = lineToken;
+				break;
+			}
+		}
+
+		if (openingBraceToken instanceof ClangSyntaxToken) {
+			toggelCollapseToken((ClangSyntaxToken) openingBraceToken);
+		}
+	}
+
+	private void toggelCollapseToken(ClangSyntaxToken openingBrace) {
+		if (DecompilerUtils.isBrace(openingBrace)) {
+			ClangSyntaxToken closingBrace = DecompilerUtils.getMatchingBrace(openingBrace);
+			if (closingBrace == null) return;
+
+			boolean isCollapsed = isBlockCollapsed(openingBrace);
+			
+		}
+
+					boolean isCollapsed = isBlockCollapsed(openingBrace);
+			List<ClangNode> list = new ArrayList<>();
+			openingBrace.Parent().flatten(list);
+
+			boolean inSection = false;
+			for (ClangNode element : list) {
+				ClangToken token = (ClangToken) element;
+				if (inSection) {
+					if ((token instanceof ClangSyntaxToken)) {
+						inSection = (!token.equals(closingBrace));
+					}
+					if (inSection) {
+						token.setCollapsedToken(!isCollapsed);
+					}
+				}
+				else if ((token instanceof ClangSyntaxToken)) {
+					inSection = (token.equals(openingBrace));
+				}
+			}
+
+			setDecompileData(decompileData);
+		}
+	}
+
+	private boolean isBlockCollapsed(ClangSyntaxToken openingBrace) {
+		ClangSyntaxToken closingBrace = DecompilerUtils.getMatchingBrace(openingBrace);
+		if (closingBrace == null) {
+			return false;
+		}
+
+		List<ClangNode> list = new ArrayList<>();
+		openingBrace.Parent().flatten(list);
+
+		boolean inSection = false;
+		for (ClangNode element : list) {
+			ClangToken token = (ClangToken) element;
+			if (inSection) {
+				if (token.equals(closingBrace)) {
+					break;
+				}
+				return token.getCollapsedToken();
+			} else if (token.equals(openingBrace)) {
+				inSection = true;
+			}
+		}
+		return false;
+	}
+
+	public Map<Integer, Boolean> getLinesWithOpeningBraces() {
+		Map<Integer, Boolean> lineNumbers = new HashMap<>();
+		List<ClangLine> lines = getLines();
+
+		for (int i = 0; i < lines.size(); i++) {
+			List<ClangToken> lineTokens = lines.get(i).getAllTokens();
+			for (ClangToken token : lineTokens) {
+				if (token.getText().contains("{") && token instanceof ClangSyntaxToken) {
+					List<ClangNode> list = new ArrayList<>();
+					token.Parent().flatten(list);
+					lineNumbers.put(i, isBlockCollapsed((ClangSyntaxToken) token));
+				}
+			}
+		}
+		return lineNumbers;
+	}
+
 	private void tryToGoto(FieldLocation location, Field field, MouseEvent event,
 			boolean newWindow) {
 		if (!navitationEnabled) {
@@ -1311,7 +1403,7 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 
 		if (options.isDisplayLineNumbers()) {
 			if (lineNumbersMargin == null) {
-				addMarginProvider(lineNumbersMargin = new LineNumberDecompilerMarginProvider());
+				addMarginProvider(lineNumbersMargin = new LineNumberDecompilerMarginProvider(this));
 			}
 		}
 		else {

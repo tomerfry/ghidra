@@ -15,7 +15,9 @@
  */
 package ghidra.app.decompiler.component;
 
+import java.lang.reflect.Parameter;
 import java.util.*;
+import java.util.function.Function;
 
 import docking.options.OptionsService;
 import docking.widgets.fieldpanel.field.Field;
@@ -820,6 +822,10 @@ public class DecompilerUtils {
 		for (; i < alltoks.size(); ++i) {
 
 			ClangToken tok = (ClangToken) alltoks.get(i);
+			if (tok.getCollapsedToken()) {
+				continue;
+			}
+			
 			if (tok instanceof ClangBreak) {
 				lines.add(current);
 				brk = (ClangBreak) tok;

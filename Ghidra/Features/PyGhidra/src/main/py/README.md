@@ -141,11 +141,15 @@ def program_context(
 
 ### pyghidra.analyze()
 ```python
-def analyze(program: "Program"):
+def analyze(
+        program: "Program", 
+        monitor: Optional["TaskMonitor"] = None
+    ) -> str:
     """
     Analyzes the given program.
 
     :param program: The Ghidra program to analyze.
+    :return: The analysis log.
     """
 ```
 
@@ -216,13 +220,19 @@ def program_loader() -> "ProgramLoader.Builder":
     """
 ```
 
-### pyghidra.dummy_monitor()
+### pyghidra.monitor()
 ```python
-def dummy_monitor() -> "TaskMonitor":
+def monitor(
+        timeout: Optional[int] = None,
+        change_callback: Callable[[str, int, int], None] = None
+    ) -> "PyGhidraTaskMonitor":
     """
-    Convenience function to get the Ghidra "TaskMonitor.DUMMY" object.
+    Convenience function to get a "PyGhidraTaskMonitor" object.
 
-    :return: The Ghidra "TaskMonitor.DUMMY" object.
+    :param timeout: An optional number of seconds to wait before canceling the monitor.
+    :param change_callback: A optional function that gets called any time the monitor receives an 
+        update.
+    :return: A "PyGhidraTaskMonitor"  object.
     """
 ```
 
@@ -281,22 +291,22 @@ with pyghidra.open_project(os.environ["GHIDRA_PROJECT_DIR"], "ExampleProject", c
         for f in fs.files(lambda f: "os/" in f.path and f.name.startswith("decompile")):
             loader.source(f.getFSRL()).projectFolderPath("/" + f.parentFile.name)
             with loader.load() as load_results:
-                load_results.save(pyghidra.dummy_monitor())
+                load_results.save(pyghidra.monitor())
 
-    # Analyze the windows decompiler program
+    # Analyze the windows decompiler program for a maximum of 10 seconds
     with pyghidra.program_context(project, "/win_x86_64/decompile.exe") as program:
         analysis_props = pyghidra.analysis_properties(program)
         with pyghidra.transaction(program):
             analysis_props.setBoolean("Non-Returning Functions - Discovered", False)
-        pyghidra.analyze(program)
-        program.save("Analyzed", pyghidra.dummy_monitor())
+        pyghidra.analyze(program, pyghidra.monitor(10))
+        program.save("Analyzed", pyghidra.monitor())
     
     # Walk the project and set a propery in each decompiler program
     def set_property(domain_file, program):
         with pyghidra.transaction(program):
             program_info = pyghidra.program_info(program)
             program_info.setString("PyGhidra Property", "Set by PyGhidra!")
-        program.save("Setting property", pyghidra.dummy_monitor())
+        program.save("Setting property", pyghidra.monitor())
     pyghidra.walk_programs(project, set_property, program_filter=lambda f, p: p.name.startswith("decompile"))
 
     # Load some bytes as a new program
@@ -305,15 +315,17 @@ with pyghidra.open_project(os.environ["GHIDRA_PROJECT_DIR"], "ExampleProject", c
     loader = pyghidra.program_loader().project(project).source(my_bytes).name("my_bytes")
     loader.loaders("BinaryLoader").language("DATA:LE:64:default")
     with loader.load() as load_results:
-        load_results.save(pyghidra.dummy_monitor())
+        load_results.save(pyghidra.monitor())
 
     # Run a GhidraScript
     pyghidra.ghidra_script(f"{os.environ['GHIDRA_SCRIPTS_DIR']}/HelloWorldScript.java", project)
 ```
 
-## Legacy API
+## Legacy API (deprecated)
 
 ### pyghidra.open_program()
+__NOTE:__ This function has been deprecated.
+
 To have PyGhidra setup a binary file for you, use the `open_program()` function. This will setup a 
 Ghidra project and import the given binary file as a program for you.
 
@@ -401,6 +413,8 @@ with pyghidra.open_program("binary_file.exe", project_name="MyProject", project_
 ```
 
 ### pyghidra.run_script()
+__NOTE:__ This function has been deprecated.
+
 PyGhidra can also be used to run an existing Ghidra Python script directly in your native CPython 
 interpreter using the `run_script()` function. However, while you can technically run an existing 
 Ghidra script unmodified, you may run into issues due to differences between Jython 2 and 
@@ -547,8 +561,8 @@ import pdb_  # imports Ghidra's pdb
 ```
 ## Change History
 __3.0.0:__
-* Introduced many new functions to the PyGhidra API. PyGhidra 3.0.0 requires Ghidra 12.0 or later
-  to run.
+* Revised the the PyGhidra API. See the [API section](#api) for more details.
+* PyGhidra 3.0.0 requires Ghidra 12.0 or later to run.
 
 __2.2.1:__
 * PyGhidra now launches with the current working directory removed from `sys.path` to prevent

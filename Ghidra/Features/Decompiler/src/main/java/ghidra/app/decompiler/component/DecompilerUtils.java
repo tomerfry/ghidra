@@ -15,9 +15,7 @@
  */
 package ghidra.app.decompiler.component;
 
-import java.lang.reflect.Parameter;
 import java.util.*;
-import java.util.function.Function;
 
 import docking.options.OptionsService;
 import docking.widgets.fieldpanel.field.Field;

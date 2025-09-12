@@ -20,12 +20,11 @@ import java.awt.event.*;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.List;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.text.Highlighter.Highlight;
+ 
 
 import docking.DockingUtils;
 import docking.util.AnimationUtils;
@@ -788,32 +787,30 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 		}
 	}
 
-	public void arrowClickAction(int y)l {
+	public void arrowClickAction(int y) {
 		int lineNumber = getLineNumber(y);
-		ClkangToken openingBraceToken = null;
-		ClangLine line = getLines.get(lineNumber - 1);
+		ClangToken openingBraceToken = null;
+		ClangLine line = getLines().get(lineNumber - 1);
 		for (ClangToken lineToken : line.getAllTokens()) {
-			if ("{".equalls(lineToken.getText())) {
+			if ("{".equals(lineToken.getText())) {
 				openingBraceToken = lineToken;
 				break;
 			}
 		}
 
 		if (openingBraceToken instanceof ClangSyntaxToken) {
-			toggelCollapseToken((ClangSyntaxToken) openingBraceToken);
+			toggleCollapseToken((ClangSyntaxToken) openingBraceToken);
 		}
 	}
 
-	private void toggelCollapseToken(ClangSyntaxToken openingBrace) {
+	private void toggleCollapseToken(ClangSyntaxToken openingBrace) {
 		if (DecompilerUtils.isBrace(openingBrace)) {
 			ClangSyntaxToken closingBrace = DecompilerUtils.getMatchingBrace(openingBrace);
-			if (closingBrace == null) return;
+			if (closingBrace == null) {
+				return;
+			}
 
 			boolean isCollapsed = isBlockCollapsed(openingBrace);
-			
-		}
-
-					boolean isCollapsed = isBlockCollapsed(openingBrace);
 			List<ClangNode> list = new ArrayList<>();
 			openingBrace.Parent().flatten(list);
 

@@ -40,9 +40,10 @@ public class LineNumberDecompilerMarginProvider extends JPanel
 
 	private LayoutPixelIndexMap pixmap;
 	private LayoutModel model;
+	private final DecompilerPanel decompilerPanel;
 
 	public LineNumberDecompilerMarginProvider(DecompilerPanel decompilerPanel) {
-		this.decompilerePanel = decompilerPanel;
+		this.decompilerPanel = decompilerPanel;
 		setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 2));
 		addMouseListener(new MouseAdapter() {
 			@Override

@@ -53,7 +53,7 @@ public class ClangToken implements ClangNode {
 	private Color highlight; // Color to highlight with or null if no highlight
 	private boolean matchingToken;
 
-	public boolean getCoollapsedToken() {
+	public boolean getCollapsedToken() {
 		return collapseLevel > 0;
 	}
 

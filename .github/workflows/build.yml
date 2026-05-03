@@ -64,6 +64,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
 
       - name: Cache fetched dependencies
         uses: actions/cache@v4
@@ -85,13 +87,13 @@ jobs:
           echo "DISPLAY=:99" >> "$GITHUB_ENV"
 
       - name: Fetch non-Maven dependencies
-        run: ./gradlew -I gradle/support/fetchDependencies.gradle
+        run: gradle -I gradle/support/fetchDependencies.gradle
 
       - name: Build Ghidra distribution
-        run: ./gradlew prepdev buildNatives buildGhidra
+        run: gradle prepdev buildNatives buildGhidra
 
       - name: Run unit tests
-        run: ./gradlew unitTestReport
+        run: gradle unitTestReport
 
       - name: Upload Ghidra distribution
         if: always()

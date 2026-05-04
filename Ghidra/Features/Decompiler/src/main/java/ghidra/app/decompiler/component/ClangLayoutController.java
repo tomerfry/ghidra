@@ -191,14 +191,32 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 	private ClangTextField createTextFieldForLine(ClangLine line, int lineCount,
 			boolean paintLineNumbers) {
+		return createTextFieldForLine(line, /*folded*/ false);
+	}
+
+	private ClangTextField createTextFieldForLine(ClangLine line, boolean folded) {
 		List<ClangToken> tokens = line.getAllTokens();
 
-		FieldElement[] elements = createFieldElementsForLine(tokens);
+		List<ClangToken> tokensForField = tokens;
+		FieldElement[] elements;
+		if (folded) {
+			tokensForField = new ArrayList<>(tokens);
+			ClangSyntaxToken placeholder =
+				new ClangSyntaxToken(null, FOLD_PLACEHOLDER, ClangToken.COMMENT_COLOR);
+			placeholder.setLineParent(line);
+			tokensForField.add(placeholder);
+			elements = createFieldElementsForLine(tokensForField);
+		}
+		else {
+			elements = createFieldElementsForLine(tokens);
+		}
 
 		int indent = line.getIndent() * indentWidth;
-		return new ClangTextField(tokens, elements, indent, line.getLineNumber(), maxWidth,
+		return new ClangTextField(tokensForField, elements, indent, line.getLineNumber(), maxWidth,
 			hlFactory);
 	}
+
+	private static final String FOLD_PLACEHOLDER = " … }";
 
 	private FieldElement[] createFieldElementsForLine(List<ClangToken> tokens) {
 
@@ -343,6 +361,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		if (!foldState.toggle(anchorIndex)) {
 			return false;
 		}
+		rebuildAnchorField(anchorIndex);
 		layoutChanged();
 		return true;
 	}
@@ -351,6 +370,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		if (!foldState.foldAll()) {
 			return false;
 		}
+		rebuildAllAnchorFields();
 		layoutChanged();
 		return true;
 	}
@@ -359,8 +379,24 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		if (!foldState.unfoldAll()) {
 			return false;
 		}
+		rebuildAllAnchorFields();
 		layoutChanged();
 		return true;
+	}
+
+	private void rebuildAnchorField(int anchorIndex) {
+		if (anchorIndex < 0 || anchorIndex >= lines.size() || fieldList == null
+				|| anchorIndex >= fieldList.length) {
+			return;
+		}
+		fieldList[anchorIndex] =
+			createTextFieldForLine(lines.get(anchorIndex), foldState.isFolded(anchorIndex));
+	}
+
+	private void rebuildAllAnchorFields() {
+		for (FoldRegion region : foldState.getRegions()) {
+			rebuildAnchorField(region.getAnchorIndex());
+		}
 	}
 
 	private void splitToMaxWidthLines(List<String> res, String line) {

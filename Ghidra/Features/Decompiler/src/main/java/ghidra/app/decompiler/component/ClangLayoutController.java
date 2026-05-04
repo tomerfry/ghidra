@@ -217,7 +217,9 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 			hlFactory);
 	}
 
-	private static final String FOLD_PLACEHOLDER = " … }";
+	// " ...} ". Three ASCII dots rather than U+2026 to avoid any source-encoding
+	// surprises on Windows builds.
+	private static final String FOLD_PLACEHOLDER = " ...}";
 
 	private FieldElement[] createFieldElementsForLine(List<ClangToken> tokens) {
 

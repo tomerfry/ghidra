@@ -695,6 +695,9 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 		// -1 since the FieldPanel is 0-based; we are 1-based
 		int lineNumber = line.getLineNumber() - 1;
 		int column = offset;
+		// If the target is hidden by a fold, expand the enclosing region(s) so the
+		// navigation lands on a visible line.
+		layoutController.revealIndex(lineNumber);
 		FieldLocation start = getCursorPosition();
 
 		int distance = getOffscreenDistance(lineNumber);
@@ -1228,6 +1231,9 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 	}
 
 	public void setCursorPosition(FieldLocation fieldLocation) {
+		// If the target is inside a folded region, unfold so the cursor has a visible
+		// home; otherwise FieldPanel will reject or clamp the position.
+		layoutController.revealIndex(fieldLocation.getIndex().intValue());
 		fieldPanel.setCursorPosition(fieldLocation.getIndex(), fieldLocation.getFieldNum(),
 			fieldLocation.getRow(), fieldLocation.getCol());
 		fieldPanel.scrollToCursor();

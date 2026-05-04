@@ -362,8 +362,52 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 			return false;
 		}
 		rebuildAnchorField(anchorIndex);
+		// If the cursor was inside the body that just collapsed, FieldPanel will see a
+		// null layout at the cursor's index next paint. We move the cursor to the anchor
+		// line preemptively so callers downstream observe a consistent cursor position.
+		if (foldState.isFolded(anchorIndex)) {
+			moveCursorOutOfHiddenRegion(anchorIndex);
+		}
 		layoutChanged();
 		return true;
+	}
+
+	private void moveCursorOutOfHiddenRegion(int anchorIndex) {
+		FoldRegion region = foldState.getRegion(anchorIndex);
+		if (region == null) {
+			return;
+		}
+		FieldLocation cursor = decompilerPanel.getCursorPosition();
+		if (cursor == null) {
+			return;
+		}
+		int cursorIdx = cursor.getIndex().intValue();
+		if (region.containsBody(cursorIdx)) {
+			decompilerPanel.setCursorPosition(
+				new FieldLocation(BigInteger.valueOf(anchorIndex), 0, 0, 0));
+		}
+	}
+
+	/**
+	 * Ensure the given layout index is visible by unfolding any enclosing folded regions.
+	 *
+	 * @param layoutIndex a layout index that should be brought into view
+	 * @return true if any folds were toggled
+	 */
+	public boolean revealIndex(int layoutIndex) {
+		boolean changed = false;
+		for (Integer anchor : new ArrayList<>(foldState.getFoldedAnchors())) {
+			FoldRegion r = foldState.getRegion(anchor);
+			if (r != null && r.containsBody(layoutIndex)) {
+				foldState.toggle(anchor);
+				rebuildAnchorField(anchor);
+				changed = true;
+			}
+		}
+		if (changed) {
+			layoutChanged();
+		}
+		return changed;
 	}
 
 	public boolean foldAll() {

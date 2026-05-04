@@ -1,0 +1,128 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+      - active-dev
+      - 'feature-active-dev/**'
+      - 'feature-active-dev-**'
+  pull_request:
+    branches:
+      - master
+      - active-dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  setup:
+    name: Determine OS matrix
+    runs-on: ubuntu-latest
+    outputs:
+      os: ${{ steps.matrix.outputs.os }}
+    steps:
+      - id: matrix
+        shell: bash
+        run: |
+          full='["ubuntu-latest","windows-latest","macos-latest"]'
+          windows_only='["windows-latest"]'
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "os=$full" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == "refs/heads/active-dev" ]]; then
+            echo "os=$full" >> "$GITHUB_OUTPUT"
+          else
+            echo "os=$windows_only" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.setup.outputs.os) }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: Cache fetched dependencies
+        uses: actions/cache@v4
+        with:
+          path: dependencies
+          key: ghidra-deps-${{ runner.os }}-${{ hashFiles('gradle/support/fetchDependencies.gradle') }}
+          restore-keys: |
+            ghidra-deps-${{ runner.os }}-
+
+      - name: Set non-interactive GUI flag
+        run: echo "JAVA_TOOL_OPTIONS=-DUSER_AGREEMENT=ACCEPT" >> "$GITHUB_ENV"
+
+      - name: Start Xvfb (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          Xvfb :99 -nolisten tcp &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Fetch non-Maven dependencies
+        run: gradle -I gradle/support/fetchDependencies.gradle
+
+      # Split into two invocations to dodge an upstream Ghidra build.gradle
+      # bug: rootProject.assembleDistribution reads from
+      # Ghidra/Features/GhidraServer/build/data, which is populated by
+      # :GhidraServer:yajswDevUnpack (a dep of :prepdev) without an explicit
+      # task dependency. Gradle 8 fails the build when both tasks are in the
+      # same task graph. Running prepdev first means build/data already exists
+      # by the time buildGhidra runs, and yajswDevUnpack is no longer in the
+      # task graph.
+      - name: Prepare dev environment and native binaries
+        run: gradle prepdev buildNatives
+
+      - name: Build Ghidra distribution
+        run: gradle buildGhidra
+
+      - name: Run unit tests
+        run: gradle unitTestReport
+
+      - name: Upload Ghidra distribution
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghidra-dist-${{ matrix.os }}
+          path: build/dist/*.zip
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.os }}
+          path: |
+            build/reports/**
+            **/build/reports/**
+            **/build/test-results/**
+          retention-days: 90
+          if-no-files-found: warn

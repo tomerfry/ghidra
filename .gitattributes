@@ -50,6 +50,13 @@
 *.vcproj text eol=crlf
 *.vcxproj text eol=crlf
 
+# Files that must keep LF line endings on every platform (including Windows
+# checkouts) so they remain executable under bash, e.g. on Windows CI runners.
+*.sh text eol=lf
+*.bash text eol=lf
+*.command text eol=lf
+gradlew text eol=lf
+
 # Denote all files that are truly binary and should not be modified.
 *.a binary
 *.apk binary

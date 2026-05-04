@@ -28,6 +28,7 @@ import docking.widgets.fieldpanel.listener.LayoutModelListener;
 import docking.widgets.fieldpanel.support.*;
 import generic.theme.GColor;
 import ghidra.app.decompiler.*;
+import ghidra.app.decompiler.component.fold.*;
 import ghidra.app.util.SymbolInspector;
 import ghidra.app.util.viewer.field.CommentUtils;
 import ghidra.framework.plugintool.ServiceProvider;
@@ -60,6 +61,8 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 	private List<ClangLine> lines = new ArrayList<>();
 
 	private boolean showLineNumbers = true;
+
+	private final FoldState foldState = new FoldState();
 
 	public ClangLayoutController(DecompileOptions opt, DecompilerPanel decompilerPanel,
 			FontMetrics met, FieldHighlightFactory hlFactory) {
@@ -100,7 +103,11 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		if (index.compareTo(numIndexes) >= 0) {
 			return null;
 		}
-		return new SingleRowLayout(fieldList[index.intValue()]);
+		int idx = index.intValue();
+		if (foldState.isHidden(idx)) {
+			return null;
+		}
+		return new SingleRowLayout(fieldList[idx]);
 	}
 
 	@Override
@@ -142,6 +149,9 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 	@Override
 	public BigInteger getIndexAfter(BigInteger index) {
 		BigInteger nextIndex = index.add(BigInteger.ONE);
+		while (nextIndex.compareTo(numIndexes) < 0 && foldState.isHidden(nextIndex.intValue())) {
+			nextIndex = nextIndex.add(BigInteger.ONE);
+		}
 		if (nextIndex.compareTo(numIndexes) >= 0) {
 			return null;
 		}
@@ -153,11 +163,22 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		if (index.compareTo(BigInteger.ZERO) <= 0) {
 			return null;
 		}
-		return index.subtract(BigInteger.ONE);
+		BigInteger prev = index.subtract(BigInteger.ONE);
+		while (prev.compareTo(BigInteger.ZERO) >= 0 && foldState.isHidden(prev.intValue())) {
+			prev = prev.subtract(BigInteger.ONE);
+		}
+		if (prev.compareTo(BigInteger.ZERO) < 0) {
+			return null;
+		}
+		return prev;
 	}
 
 	public int getIndexBefore(int index) {
-		return index - 1;
+		int prev = index - 1;
+		while (prev >= 0 && foldState.isHidden(prev)) {
+			prev--;
+		}
+		return prev;
 	}
 
 	public ClangTokenGroup getRoot() {
@@ -293,9 +314,53 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 			fieldList[i] = createTextFieldForLine(oneLine, lineCount, showLineNumbers);
 		}
 
+		// Rescan fold regions whenever the document is rebuilt. Drop any prior fold
+		// state, since line numbering may have shifted.
+		foldState.setRegions(FoldRegionScanner.scan(docroot));
+
 		if (display) {
 			modelChanged(); // Inform the listeners that we have changed
 		}
+	}
+
+	// --- Fold API ---------------------------------------------------------------------
+
+	/**
+	 * @return the live fold state for this controller; never null
+	 */
+	public FoldState getFoldState() {
+		return foldState;
+	}
+
+	/**
+	 * Toggle the fold at the given anchor layout index. No-op if the index is not a
+	 * fold anchor. Fires a {@code dataChanged} so the panel and any margins repaint.
+	 *
+	 * @param anchorIndex layout index of the line containing the opening brace
+	 * @return true if the fold state changed
+	 */
+	public boolean toggleFold(int anchorIndex) {
+		if (!foldState.toggle(anchorIndex)) {
+			return false;
+		}
+		layoutChanged();
+		return true;
+	}
+
+	public boolean foldAll() {
+		if (!foldState.foldAll()) {
+			return false;
+		}
+		layoutChanged();
+		return true;
+	}
+
+	public boolean unfoldAll() {
+		if (!foldState.unfoldAll()) {
+			return false;
+		}
+		layoutChanged();
+		return true;
 	}
 
 	private void splitToMaxWidthLines(List<String> res, String line) {

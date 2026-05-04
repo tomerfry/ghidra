@@ -80,6 +80,10 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 	private final List<DecompilerMarginProvider> marginProviders = new ArrayList<>();
 	private final VerticalLayoutPixelIndexMap pixmap = new VerticalLayoutPixelIndexMap();
 
+	// Per-function fold state remembered for the lifetime of this panel. Weak keys so
+	// closing/reopening a program lets the entries be collected.
+	private final Map<Function, Set<Integer>> savedFoldStates = new WeakHashMap<>();
+
 	private FieldHighlightFactory hlFactory;
 	private ClangHighlightController highlightController =
 		ClangHighlightController.dummyIfNull(null);
@@ -527,7 +531,21 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 			activeMiddleMouse = null;
 		}
 
+		// Capture fold state for the outgoing function before its layout is replaced.
+		// Stored per-function so navigating away and back restores the fold positions
+		// the user set up. In-session only; not persisted to disk.
 		DecompileData oldData = this.decompileData;
+		Function oldFunction = oldData != null ? oldData.getFunction() : null;
+		if (oldFunction != null && oldData.hasDecompileResults()) {
+			Set<Integer> currentFolds = layoutController.getFoldState().getFoldedAnchors();
+			if (!currentFolds.isEmpty()) {
+				savedFoldStates.put(oldFunction, new HashSet<>(currentFolds));
+			}
+			else {
+				savedFoldStates.remove(oldFunction);
+			}
+		}
+
 		this.decompileData = decompileData;
 		Function function = decompileData.getFunction();
 		if (decompileData.hasDecompileResults()) {
@@ -535,6 +553,10 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 			if (decompileData.getDebugFile() != null) {
 				controller.setStatusMessage(
 					"Debug file generated: " + decompileData.getDebugFile().getAbsolutePath());
+			}
+			Set<Integer> savedFolds = function != null ? savedFoldStates.get(function) : null;
+			if (savedFolds != null) {
+				layoutController.applyFoldedAnchors(savedFolds);
 			}
 		}
 		else {

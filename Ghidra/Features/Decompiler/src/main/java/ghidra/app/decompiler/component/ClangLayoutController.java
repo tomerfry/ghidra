@@ -19,6 +19,7 @@ import java.awt.*;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import docking.widgets.fieldpanel.Layout;
 import docking.widgets.fieldpanel.LayoutModel;
@@ -440,6 +441,31 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 	private void rebuildAllAnchorFields() {
 		for (FoldRegion region : foldState.getRegions()) {
 			rebuildAnchorField(region.getAnchorIndex());
+		}
+	}
+
+	/**
+	 * Re-apply a previously saved set of folded anchor indices. Anchors that no longer
+	 * correspond to a discovered fold region are silently dropped (e.g. the function
+	 * was edited and braces moved).
+	 *
+	 * @param savedAnchors anchor indices that should be folded
+	 */
+	public void applyFoldedAnchors(Set<Integer> savedAnchors) {
+		if (savedAnchors == null || savedAnchors.isEmpty()) {
+			return;
+		}
+		boolean any = false;
+		for (Integer anchor : savedAnchors) {
+			if (foldState.isFoldable(anchor) && !foldState.isFolded(anchor)) {
+				if (foldState.toggle(anchor)) {
+					rebuildAnchorField(anchor);
+					any = true;
+				}
+			}
+		}
+		if (any) {
+			layoutChanged();
 		}
 	}
 

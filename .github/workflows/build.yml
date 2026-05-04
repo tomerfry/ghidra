@@ -7,14 +7,26 @@ on:
       - active-dev
       - 'feature-active-dev/**'
       - 'feature-active-dev-**'
+    paths-ignore:
+      - '**.md'
+      - 'GhidraDocs/**'
+      - 'licenses/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.gitignore'
   pull_request:
     branches:
       - master
       - active-dev
+    paths-ignore:
+      - '**.md'
+      - 'GhidraDocs/**'
+      - 'licenses/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.gitignore'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   setup:
@@ -22,18 +34,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       os: ${{ steps.matrix.outputs.os }}
+      run_tests: ${{ steps.matrix.outputs.run_tests }}
     steps:
       - id: matrix
         shell: bash
         run: |
           full='["ubuntu-latest","windows-latest","macos-latest"]'
           windows_only='["windows-latest"]'
+          # PRs and pushes to master/active-dev: full OS matrix + tests.
+          # Pushes to feature-active-dev/* branches: Windows-only smoke build,
+          # no tests (full tests run on the PR before merge to active-dev).
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "os=$full" >> "$GITHUB_OUTPUT"
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == "refs/heads/active-dev" ]]; then
             echo "os=$full" >> "$GITHUB_OUTPUT"
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
           else
             echo "os=$windows_only" >> "$GITHUB_OUTPUT"
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -104,6 +123,7 @@ jobs:
         run: gradle buildGhidra
 
       - name: Run unit tests
+        if: needs.setup.outputs.run_tests == 'true'
         run: gradle unitTestReport
 
       - name: Upload Ghidra distribution
@@ -116,7 +136,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload test reports
-        if: always()
+        if: always() && needs.setup.outputs.run_tests == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: test-reports-${{ matrix.os }}

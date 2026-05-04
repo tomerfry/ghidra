@@ -70,6 +70,7 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 	private final DecompilerController controller;
 	private final DecompileOptions options;
 	private LineNumberDecompilerMarginProvider lineNumbersMargin;
+	private FoldDecompilerMarginProvider foldMargin;
 
 	private final DecompilerFieldPanel fieldPanel;
 	private ClangLayoutController layoutController;
@@ -162,6 +163,12 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 		setPreferredSize(new Dimension(600, 400));
 		setDecompileData(new EmptyDecompileData("No Function"));
 
+		// Fold gutter must be added before the line-number margin so that, after both
+		// addMarginProvider calls (which prepend), the visual order from left to right is:
+		// [line numbers] [fold gutter] [text].
+		if (options.isDisplayFoldGutter()) {
+			addMarginProvider(foldMargin = new FoldDecompilerMarginProvider());
+		}
 		if (options.isDisplayLineNumbers()) {
 			addMarginProvider(lineNumbersMargin = new LineNumberDecompilerMarginProvider());
 		}
@@ -1356,6 +1363,18 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 			if (lineNumbersMargin != null) {
 				removeMarginProvider(lineNumbersMargin);
 				lineNumbersMargin = null;
+			}
+		}
+
+		if (options.isDisplayFoldGutter()) {
+			if (foldMargin == null) {
+				addMarginProvider(foldMargin = new FoldDecompilerMarginProvider());
+			}
+		}
+		else {
+			if (foldMargin != null) {
+				removeMarginProvider(foldMargin);
+				foldMargin = null;
 			}
 		}
 

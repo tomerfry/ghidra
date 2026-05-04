@@ -107,7 +107,15 @@ public class LineNumberDecompilerMarginProvider extends JPanel
 		BigInteger startIdx = pixmap.getIndex(visible.y);
 		BigInteger endIdx = pixmap.getIndex(visible.y + visible.height);
 		int ascent = g.getFontMetrics().getMaxAscent();
+		boolean canCheckVisibility = pixmap instanceof VerticalLayoutPixelIndexMap;
+		VerticalLayoutPixelIndexMap vmap =
+			canCheckVisibility ? (VerticalLayoutPixelIndexMap) pixmap : null;
 		for (BigInteger i = startIdx; i.compareTo(endIdx) <= 0; i = i.add(BigInteger.ONE)) {
+			// Skip indices hidden by scope folding so we don't print line numbers on top
+			// of the next visible row.
+			if (vmap != null && !vmap.isVisible(i)) {
+				continue;
+			}
 			String text = i.add(BigInteger.ONE).toString();
 			int width = g.getFontMetrics().stringWidth(text);
 			GraphicsUtils.drawString(this, g, text, rightEdge - width, pixmap.getPixel(i) + ascent);

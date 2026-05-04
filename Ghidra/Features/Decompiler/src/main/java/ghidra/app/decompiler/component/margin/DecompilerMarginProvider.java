@@ -45,8 +45,11 @@ public interface DecompilerMarginProvider {
 	 * line of code is rendered by the layout at index 0. The tenth is rendered by the layout at
 	 * index 9. Rarely, a line may be wrapped by the renderer, leading to a non-uniform layout. The
 	 * {@code pixmap} can map from a pixel's vertical position to the layout index at the same
-	 * position in the main panel. It accounts for scrolling an non-uniformity. It is safe to assume
-	 * the layouts render contiguous lines of C code. The recommended strategy for painting is thus:
+	 * position in the main panel. It accounts for scrolling and non-uniformity. Note that with
+	 * scope folding enabled, intermediate indices may be hidden — implementations that iterate by
+	 * incrementing layout indices should skip indices for which {@link LayoutModel#getLayout} is
+	 * {@code null}, or use {@link VerticalLayoutPixelIndexMap#isVisible} when the concrete map
+	 * type is known. The recommended strategy for painting is thus:
 	 * 
 	 * <ol>
 	 * <li>Compute the visible part of the margin needing repainting. See

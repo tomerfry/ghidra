@@ -89,8 +89,19 @@ jobs:
       - name: Fetch non-Maven dependencies
         run: gradle -I gradle/support/fetchDependencies.gradle
 
+      # Split into two invocations to dodge an upstream Ghidra build.gradle
+      # bug: rootProject.assembleDistribution reads from
+      # Ghidra/Features/GhidraServer/build/data, which is populated by
+      # :GhidraServer:yajswDevUnpack (a dep of :prepdev) without an explicit
+      # task dependency. Gradle 8 fails the build when both tasks are in the
+      # same task graph. Running prepdev first means build/data already exists
+      # by the time buildGhidra runs, and yajswDevUnpack is no longer in the
+      # task graph.
+      - name: Prepare dev environment and native binaries
+        run: gradle prepdev buildNatives
+
       - name: Build Ghidra distribution
-        run: gradle prepdev buildNatives buildGhidra
+        run: gradle buildGhidra
 
       - name: Run unit tests
         run: gradle unitTestReport

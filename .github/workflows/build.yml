@@ -103,7 +103,12 @@ jobs:
       - name: Build Ghidra distribution
         run: gradle buildGhidra
 
+      # The unit-test suite forks a JVM per test class (forkEvery=1) for ~700+ test
+      # classes, which takes ~2h on Windows runners. Skip it on smoke-only pushes to
+      # feature-active-dev/** so CI gives fast compile-feedback on every push, and
+      # rely on the PR run to cover the full suite on all three OSes.
       - name: Run unit tests
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/active-dev'
         run: gradle unitTestReport
 
       - name: Upload Ghidra distribution

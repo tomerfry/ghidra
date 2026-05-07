@@ -109,6 +109,14 @@ public class DecompilerController {
 	 */
 	public void display(Program program, ProgramLocation location, ViewerPosition viewerPosition) {
 
+		// A location event can fire (via SwingUpdateManager) before the provider's
+		// program field has been wired up — e.g. immediately after program open, when
+		// setProgram has been queued but not yet run. Without this guard we would NPE
+		// in loadFromCache (program.getFunctionManager()).
+		if (program == null) {
+			return;
+		}
+
 		if (isAlreadyDecompiled(location)) {
 			decompilerPanel.setLocation(location, viewerPosition);
 			return;

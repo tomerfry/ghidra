@@ -66,15 +66,21 @@ public class FoldDecompilerMarginProvider extends JPanel
 		// We need access to FoldState, which only ClangLayoutController exposes. If the
 		// model is something else (a unit test stand-in, say), the chevron simply won't
 		// paint — no exception, no broken UI.
+		ClangLayoutController newController =
+			model instanceof ClangLayoutController ? (ClangLayoutController) model : null;
+		if (this.controller == newController) {
+			// Same model — don't re-register. setProgram is called re-entrantly during
+			// modelChanged dispatch (FieldPanel -> layoutsChanged -> setProgram on every
+			// margin), and mutating the listener list here while ClangLayoutController is
+			// iterating it throws ConcurrentModificationException.
+			return;
+		}
 		if (this.controller != null) {
 			this.controller.removeLayoutModelListener(this);
 		}
-		if (model instanceof ClangLayoutController) {
-			this.controller = (ClangLayoutController) model;
+		this.controller = newController;
+		if (this.controller != null) {
 			this.controller.addLayoutModelListener(this);
-		}
-		else {
-			this.controller = null;
 		}
 	}
 

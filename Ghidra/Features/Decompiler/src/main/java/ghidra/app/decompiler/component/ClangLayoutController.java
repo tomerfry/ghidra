@@ -121,28 +121,33 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		listeners.remove(listener);
 	}
 
+	// Iteration snapshots: a listener's callback can re-enter and add/remove listeners
+	// (e.g. FieldPanel.modelSizeChanged -> layoutsChanged -> margin.setProgram, which
+	// re-registers the margin's own listener). Iterate a copy so the underlying
+	// ArrayList can be mutated without throwing ConcurrentModificationException.
+
 	@Override
 	public void modelSizeChanged(IndexMapper mapper) {
-		for (LayoutModelListener listener : listeners) {
+		for (LayoutModelListener listener : new ArrayList<>(listeners)) {
 			listener.modelSizeChanged(mapper);
 		}
 	}
 
 	public void modelChanged() {
-		for (LayoutModelListener listener : listeners) {
+		for (LayoutModelListener listener : new ArrayList<>(listeners)) {
 			listener.modelSizeChanged(IndexMapper.IDENTITY_MAPPER);
 		}
 	}
 
 	@Override
 	public void dataChanged(BigInteger start, BigInteger end) {
-		for (LayoutModelListener listener : listeners) {
+		for (LayoutModelListener listener : new ArrayList<>(listeners)) {
 			listener.dataChanged(start, end);
 		}
 	}
 
 	public void layoutChanged() {
-		for (LayoutModelListener listener : listeners) {
+		for (LayoutModelListener listener : new ArrayList<>(listeners)) {
 			listener.dataChanged(BigInteger.ZERO, numIndexes);
 		}
 	}

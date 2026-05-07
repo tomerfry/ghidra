@@ -472,13 +472,16 @@ public class DecompileOptions {
 		"Number of Decompiled Functions to Cache in the Decompile Window";
 
 	private final static String LINE_NUMBER_MSG = "Display.Display Line Numbers";
+	private final static String FOLD_GUTTER_MSG = "Display.Display Fold Gutter";
 	private final static String DECOMPILE_TIMEOUT = "Decompiler Timeout (seconds)";
 	private final static String PAYLOAD_LIMIT = "Decompiler Max-Payload (MBytes)";
 	private final static String MAX_INSTRUCTIONS = "Max Instructions per Function";
 	private final static String MAX_JUMPTABLE_ENTRIES = "Max Entries per Jumptable";
 	private final static Boolean LINE_NUMBER_DEF = Boolean.TRUE;
+	private final static Boolean FOLD_GUTTER_DEF = Boolean.TRUE;
 
 	private boolean displayLineNumbers;
+	private boolean displayFoldGutter;
 	private int decompileTimeoutSeconds;
 	private int payloadLimitMBytes;
 	private int maxIntructionsPer;
@@ -526,6 +529,7 @@ public class DecompileOptions {
 		namespaceStrategy = NAMESPACE_OPTIONDEFAULT;
 		integerFormat = INTEGERFORMAT_OPTIONDEFAULT;
 		displayLineNumbers = LINE_NUMBER_DEF;
+		displayFoldGutter = FOLD_GUTTER_DEF;
 		displayLanguage = ProgramCompilerSpec.DECOMPILER_OUTPUT_DEF;
 		protoEvalModel = "default";
 		decompileTimeoutSeconds = SUGGESTED_DECOMPILE_TIMEOUT_SECS;
@@ -592,6 +596,7 @@ public class DecompileOptions {
 		integerFormat = opt.getEnum(INTEGERFORMAT_OPTIONSTRING, INTEGERFORMAT_OPTIONDEFAULT);
 
 		displayLineNumbers = opt.getBoolean(LINE_NUMBER_MSG, LINE_NUMBER_DEF);
+		displayFoldGutter = opt.getBoolean(FOLD_GUTTER_MSG, FOLD_GUTTER_DEF);
 		decompileTimeoutSeconds = opt.getInt(DECOMPILE_TIMEOUT, SUGGESTED_DECOMPILE_TIMEOUT_SECS);
 		payloadLimitMBytes = opt.getInt(PAYLOAD_LIMIT, SUGGESTED_MAX_PAYLOAD_BYTES);
 		maxIntructionsPer = opt.getInt(MAX_INSTRUCTIONS, SUGGESTED_MAX_INSTRUCTIONS);
@@ -797,6 +802,9 @@ public class DecompileOptions {
 		opt.registerOption(LINE_NUMBER_MSG, LINE_NUMBER_DEF,
 			new HelpLocation(HelpTopics.DECOMPILER, "DisplayLineNumbers"),
 			"Toggle for displaying line numbers in the decompiler.");
+		opt.registerOption(FOLD_GUTTER_MSG, FOLD_GUTTER_DEF,
+			new HelpLocation(HelpTopics.DECOMPILER, "DisplayLineNumbers"),
+			"Toggle for displaying the fold gutter (chevrons next to foldable scopes).");
 		opt.registerOption(DECOMPILE_TIMEOUT, SUGGESTED_DECOMPILE_TIMEOUT_SECS,
 			new HelpLocation(HelpTopics.DECOMPILER, "GeneralTimeout"),
 			"The number of seconds to allow the decompiler to run before terminating the " +
@@ -1316,6 +1324,14 @@ public class DecompileOptions {
 	 */
 	public boolean isDisplayLineNumbers() {
 		return displayLineNumbers;
+	}
+
+	/**
+	 * {@return true if the fold-gutter (clickable chevrons next to foldable scopes) should
+	 * be shown in the decompiler.}
+	 */
+	public boolean isDisplayFoldGutter() {
+		return displayFoldGutter;
 	}
 
 	/**

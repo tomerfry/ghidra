@@ -70,6 +70,7 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 	private final DecompilerController controller;
 	private final DecompileOptions options;
 	private LineNumberDecompilerMarginProvider lineNumbersMargin;
+	private FoldDecompilerMarginProvider foldMargin;
 
 	private final DecompilerFieldPanel fieldPanel;
 	private ClangLayoutController layoutController;
@@ -78,6 +79,10 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 
 	private final List<DecompilerMarginProvider> marginProviders = new ArrayList<>();
 	private final VerticalLayoutPixelIndexMap pixmap = new VerticalLayoutPixelIndexMap();
+
+	// Per-function fold state remembered for the lifetime of this panel. Weak keys so
+	// closing/reopening a program lets the entries be collected.
+	private final Map<Function, Set<Integer>> savedFoldStates = new WeakHashMap<>();
 
 	private FieldHighlightFactory hlFactory;
 	private ClangHighlightController highlightController =
@@ -162,6 +167,12 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 		setPreferredSize(new Dimension(600, 400));
 		setDecompileData(new EmptyDecompileData("No Function"));
 
+		// Fold gutter must be added before the line-number margin so that, after both
+		// addMarginProvider calls (which prepend), the visual order from left to right is:
+		// [line numbers] [fold gutter] [text].
+		if (options.isDisplayFoldGutter()) {
+			addMarginProvider(foldMargin = new FoldDecompilerMarginProvider());
+		}
 		if (options.isDisplayLineNumbers()) {
 			addMarginProvider(lineNumbersMargin = new LineNumberDecompilerMarginProvider());
 		}
@@ -520,7 +531,21 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 			activeMiddleMouse = null;
 		}
 
+		// Capture fold state for the outgoing function before its layout is replaced.
+		// Stored per-function so navigating away and back restores the fold positions
+		// the user set up. In-session only; not persisted to disk.
 		DecompileData oldData = this.decompileData;
+		Function oldFunction = oldData != null ? oldData.getFunction() : null;
+		if (oldFunction != null && oldData.hasDecompileResults()) {
+			Set<Integer> currentFolds = layoutController.getFoldState().getFoldedAnchors();
+			if (!currentFolds.isEmpty()) {
+				savedFoldStates.put(oldFunction, new HashSet<>(currentFolds));
+			}
+			else {
+				savedFoldStates.remove(oldFunction);
+			}
+		}
+
 		this.decompileData = decompileData;
 		Function function = decompileData.getFunction();
 		if (decompileData.hasDecompileResults()) {
@@ -528,6 +553,10 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 			if (decompileData.getDebugFile() != null) {
 				controller.setStatusMessage(
 					"Debug file generated: " + decompileData.getDebugFile().getAbsolutePath());
+			}
+			Set<Integer> savedFolds = function != null ? savedFoldStates.get(function) : null;
+			if (savedFolds != null) {
+				layoutController.applyFoldedAnchors(savedFolds);
 			}
 		}
 		else {
@@ -688,6 +717,9 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 		// -1 since the FieldPanel is 0-based; we are 1-based
 		int lineNumber = line.getLineNumber() - 1;
 		int column = offset;
+		// If the target is hidden by a fold, expand the enclosing region(s) so the
+		// navigation lands on a visible line.
+		layoutController.revealIndex(lineNumber);
 		FieldLocation start = getCursorPosition();
 
 		int distance = getOffscreenDistance(lineNumber);
@@ -1221,6 +1253,9 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 	}
 
 	public void setCursorPosition(FieldLocation fieldLocation) {
+		// If the target is inside a folded region, unfold so the cursor has a visible
+		// home; otherwise FieldPanel will reject or clamp the position.
+		layoutController.revealIndex(fieldLocation.getIndex().intValue());
 		fieldPanel.setCursorPosition(fieldLocation.getIndex(), fieldLocation.getFieldNum(),
 			fieldLocation.getRow(), fieldLocation.getCol());
 		fieldPanel.scrollToCursor();
@@ -1356,6 +1391,18 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 			if (lineNumbersMargin != null) {
 				removeMarginProvider(lineNumbersMargin);
 				lineNumbersMargin = null;
+			}
+		}
+
+		if (options.isDisplayFoldGutter()) {
+			if (foldMargin == null) {
+				addMarginProvider(foldMargin = new FoldDecompilerMarginProvider());
+			}
+		}
+		else {
+			if (foldMargin != null) {
+				removeMarginProvider(foldMargin);
+				foldMargin = null;
 			}
 		}
 

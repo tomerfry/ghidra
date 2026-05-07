@@ -19,6 +19,7 @@ import java.awt.*;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import docking.widgets.fieldpanel.Layout;
 import docking.widgets.fieldpanel.LayoutModel;
@@ -28,6 +29,7 @@ import docking.widgets.fieldpanel.listener.LayoutModelListener;
 import docking.widgets.fieldpanel.support.*;
 import generic.theme.GColor;
 import ghidra.app.decompiler.*;
+import ghidra.app.decompiler.component.fold.*;
 import ghidra.app.util.SymbolInspector;
 import ghidra.app.util.viewer.field.CommentUtils;
 import ghidra.framework.plugintool.ServiceProvider;
@@ -60,6 +62,8 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 	private List<ClangLine> lines = new ArrayList<>();
 
 	private boolean showLineNumbers = true;
+
+	private final FoldState foldState = new FoldState();
 
 	public ClangLayoutController(DecompileOptions opt, DecompilerPanel decompilerPanel,
 			FontMetrics met, FieldHighlightFactory hlFactory) {
@@ -100,7 +104,11 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		if (index.compareTo(numIndexes) >= 0) {
 			return null;
 		}
-		return new SingleRowLayout(fieldList[index.intValue()]);
+		int idx = index.intValue();
+		if (foldState.isHidden(idx)) {
+			return null;
+		}
+		return new SingleRowLayout(fieldList[idx]);
 	}
 
 	@Override
@@ -142,6 +150,9 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 	@Override
 	public BigInteger getIndexAfter(BigInteger index) {
 		BigInteger nextIndex = index.add(BigInteger.ONE);
+		while (nextIndex.compareTo(numIndexes) < 0 && foldState.isHidden(nextIndex.intValue())) {
+			nextIndex = nextIndex.add(BigInteger.ONE);
+		}
 		if (nextIndex.compareTo(numIndexes) >= 0) {
 			return null;
 		}
@@ -153,11 +164,22 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		if (index.compareTo(BigInteger.ZERO) <= 0) {
 			return null;
 		}
-		return index.subtract(BigInteger.ONE);
+		BigInteger prev = index.subtract(BigInteger.ONE);
+		while (prev.compareTo(BigInteger.ZERO) >= 0 && foldState.isHidden(prev.intValue())) {
+			prev = prev.subtract(BigInteger.ONE);
+		}
+		if (prev.compareTo(BigInteger.ZERO) < 0) {
+			return null;
+		}
+		return prev;
 	}
 
 	public int getIndexBefore(int index) {
-		return index - 1;
+		int prev = index - 1;
+		while (prev >= 0 && foldState.isHidden(prev)) {
+			prev--;
+		}
+		return prev;
 	}
 
 	public ClangTokenGroup getRoot() {
@@ -170,14 +192,34 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 	private ClangTextField createTextFieldForLine(ClangLine line, int lineCount,
 			boolean paintLineNumbers) {
+		return createTextFieldForLine(line, /*folded*/ false);
+	}
+
+	private ClangTextField createTextFieldForLine(ClangLine line, boolean folded) {
 		List<ClangToken> tokens = line.getAllTokens();
 
-		FieldElement[] elements = createFieldElementsForLine(tokens);
+		List<ClangToken> tokensForField = tokens;
+		FieldElement[] elements;
+		if (folded) {
+			tokensForField = new ArrayList<>(tokens);
+			ClangSyntaxToken placeholder =
+				new ClangSyntaxToken(null, FOLD_PLACEHOLDER, ClangToken.COMMENT_COLOR);
+			placeholder.setLineParent(line);
+			tokensForField.add(placeholder);
+			elements = createFieldElementsForLine(tokensForField);
+		}
+		else {
+			elements = createFieldElementsForLine(tokens);
+		}
 
 		int indent = line.getIndent() * indentWidth;
-		return new ClangTextField(tokens, elements, indent, line.getLineNumber(), maxWidth,
+		return new ClangTextField(tokensForField, elements, indent, line.getLineNumber(), maxWidth,
 			hlFactory);
 	}
+
+	// " ...} ". Three ASCII dots rather than U+2026 to avoid any source-encoding
+	// surprises on Windows builds.
+	private static final String FOLD_PLACEHOLDER = " ...}";
 
 	private FieldElement[] createFieldElementsForLine(List<ClangToken> tokens) {
 
@@ -293,8 +335,139 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 			fieldList[i] = createTextFieldForLine(oneLine, lineCount, showLineNumbers);
 		}
 
+		// Rescan fold regions whenever the document is rebuilt. Drop any prior fold
+		// state, since line numbering may have shifted.
+		foldState.setRegions(FoldRegionScanner.scan(docroot));
+
 		if (display) {
 			modelChanged(); // Inform the listeners that we have changed
+		}
+	}
+
+	// --- Fold API ---------------------------------------------------------------------
+
+	/**
+	 * @return the live fold state for this controller; never null
+	 */
+	public FoldState getFoldState() {
+		return foldState;
+	}
+
+	/**
+	 * Toggle the fold at the given anchor layout index. No-op if the index is not a
+	 * fold anchor. Fires a {@code dataChanged} so the panel and any margins repaint.
+	 *
+	 * @param anchorIndex layout index of the line containing the opening brace
+	 * @return true if the fold state changed
+	 */
+	public boolean toggleFold(int anchorIndex) {
+		if (!foldState.toggle(anchorIndex)) {
+			return false;
+		}
+		rebuildAnchorField(anchorIndex);
+		// If the cursor was inside the body that just collapsed, FieldPanel will see a
+		// null layout at the cursor's index next paint. We move the cursor to the anchor
+		// line preemptively so callers downstream observe a consistent cursor position.
+		if (foldState.isFolded(anchorIndex)) {
+			moveCursorOutOfHiddenRegion(anchorIndex);
+		}
+		layoutChanged();
+		return true;
+	}
+
+	private void moveCursorOutOfHiddenRegion(int anchorIndex) {
+		FoldRegion region = foldState.getRegion(anchorIndex);
+		if (region == null) {
+			return;
+		}
+		FieldLocation cursor = decompilerPanel.getCursorPosition();
+		if (cursor == null) {
+			return;
+		}
+		int cursorIdx = cursor.getIndex().intValue();
+		if (region.containsBody(cursorIdx)) {
+			decompilerPanel.setCursorPosition(
+				new FieldLocation(BigInteger.valueOf(anchorIndex), 0, 0, 0));
+		}
+	}
+
+	/**
+	 * Ensure the given layout index is visible by unfolding any enclosing folded regions.
+	 *
+	 * @param layoutIndex a layout index that should be brought into view
+	 * @return true if any folds were toggled
+	 */
+	public boolean revealIndex(int layoutIndex) {
+		boolean changed = false;
+		for (Integer anchor : new ArrayList<>(foldState.getFoldedAnchors())) {
+			FoldRegion r = foldState.getRegion(anchor);
+			if (r != null && r.containsBody(layoutIndex)) {
+				foldState.toggle(anchor);
+				rebuildAnchorField(anchor);
+				changed = true;
+			}
+		}
+		if (changed) {
+			layoutChanged();
+		}
+		return changed;
+	}
+
+	public boolean foldAll() {
+		if (!foldState.foldAll()) {
+			return false;
+		}
+		rebuildAllAnchorFields();
+		layoutChanged();
+		return true;
+	}
+
+	public boolean unfoldAll() {
+		if (!foldState.unfoldAll()) {
+			return false;
+		}
+		rebuildAllAnchorFields();
+		layoutChanged();
+		return true;
+	}
+
+	private void rebuildAnchorField(int anchorIndex) {
+		if (anchorIndex < 0 || anchorIndex >= lines.size() || fieldList == null
+				|| anchorIndex >= fieldList.length) {
+			return;
+		}
+		fieldList[anchorIndex] =
+			createTextFieldForLine(lines.get(anchorIndex), foldState.isFolded(anchorIndex));
+	}
+
+	private void rebuildAllAnchorFields() {
+		for (FoldRegion region : foldState.getRegions()) {
+			rebuildAnchorField(region.getAnchorIndex());
+		}
+	}
+
+	/**
+	 * Re-apply a previously saved set of folded anchor indices. Anchors that no longer
+	 * correspond to a discovered fold region are silently dropped (e.g. the function
+	 * was edited and braces moved).
+	 *
+	 * @param savedAnchors anchor indices that should be folded
+	 */
+	public void applyFoldedAnchors(Set<Integer> savedAnchors) {
+		if (savedAnchors == null || savedAnchors.isEmpty()) {
+			return;
+		}
+		boolean any = false;
+		for (Integer anchor : savedAnchors) {
+			if (foldState.isFoldable(anchor) && !foldState.isFolded(anchor)) {
+				if (foldState.toggle(anchor)) {
+					rebuildAnchorField(anchor);
+					any = true;
+				}
+			}
+		}
+		if (any) {
+			layoutChanged();
 		}
 	}
 

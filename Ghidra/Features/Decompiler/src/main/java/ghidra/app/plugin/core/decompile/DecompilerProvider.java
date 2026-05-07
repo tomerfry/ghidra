@@ -1187,6 +1187,9 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		GoToNextBraceAction goToNextBraceAction = new GoToNextBraceAction();
 		GoToPreviousBraceAction goToPreviousBraceAction = new GoToPreviousBraceAction();
 		DisplayTypeCastsAction displayTypeCastsAction = new DisplayTypeCastsAction(plugin);
+		ToggleFoldAction toggleFoldAction = new ToggleFoldAction();
+		FoldAllAction foldAllAction = new FoldAllAction();
+		UnfoldAllAction unfoldAllAction = new UnfoldAllAction();
 
 		addLocalAction(refreshAction);
 		addLocalAction(displayUnreachableCodeToggle);
@@ -1245,6 +1248,9 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		addLocalAction(cloneDecompilerAction);
 		addLocalAction(goToNextBraceAction);
 		addLocalAction(goToPreviousBraceAction);
+		addLocalAction(toggleFoldAction);
+		addLocalAction(foldAllAction);
+		addLocalAction(unfoldAllAction);
 
 		graphServiceAdded();
 	}

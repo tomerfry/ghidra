@@ -4,21 +4,21 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package db.buffers;
+package ghidra.server.remote;
 
 import java.io.IOException;
 import java.rmi.RemoteException;
 
-import ghidra.server.remote.RepositoryHandleImpl;
+import db.buffers.*;
 import ghidra.server.stream.BlockStreamServer;
 import ghidra.server.stream.RemoteInputBlockStreamHandle;
 
@@ -38,7 +38,7 @@ public class RemoteManagedBufferFileImpl extends RemoteBufferFileImpl
 	 * @param managedBufferFile underlying managed buffer file
 	 * @param owner associated repository handle instance
 	 * @param associatedFilePath associated file path for logging
-	 * @throws RemoteException
+	 * @throws RemoteException if failed to instantiate remote object
 	 */
 	public RemoteManagedBufferFileImpl(LocalManagedBufferFile managedBufferFile,
 			RepositoryHandleImpl owner, String associatedFilePath) throws RemoteException {
@@ -48,12 +48,18 @@ public class RemoteManagedBufferFileImpl extends RemoteBufferFileImpl
 
 	@Override
 	public RemoteManagedBufferFileHandle getSaveFile() throws IOException {
-		LocalManagedBufferFile sf = (LocalManagedBufferFile) managedBufferFile.getSaveFile();
-		return sf != null ? new RemoteManagedBufferFileImpl(sf, owner, associatedFilePath) : null;
+		try {
+			LocalManagedBufferFile sf = (LocalManagedBufferFile) managedBufferFile.getSaveFile();
+			return sf != null ? new RemoteManagedBufferFileImpl(sf, owner, associatedFilePath) : null;
+		}
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t, "getSaveFile: " + associatedFilePath,
+				user);
+		}
 	}
 
 	@Override
-	public boolean delete() throws IOException {
+	public boolean delete() {
 		if (managedBufferFile.getVersion() == 1) {
 			owner.getRepository().log(associatedFilePath, "aborting file creation",
 				owner.getUserName());
@@ -63,44 +69,69 @@ public class RemoteManagedBufferFileImpl extends RemoteBufferFileImpl
 
 	@Override
 	public void saveCompleted(boolean commit) throws IOException {
-		if (!commit) {
-			int version = managedBufferFile.getVersion();
-			owner.getRepository().log(associatedFilePath,
-				"aborting file version " + version + " creation", owner.getUserName());
+		try {
+			if (!commit) {
+				int version = managedBufferFile.getVersion();
+				owner.getRepository().log(associatedFilePath,
+					"aborting file version " + version + " creation", owner.getUserName());
+			}
+			managedBufferFile.saveCompleted(commit);
 		}
-		managedBufferFile.saveCompleted(commit);
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t, "saveCompleted: " + associatedFilePath,
+				user);
+		}
 	}
 
 	@Override
-	public boolean canSave() throws IOException {
+	public boolean canSave() {
 		return managedBufferFile.canSave();
 	}
 
 	@Override
-	public void setVersionComment(String comment) throws IOException {
+	public void setVersionComment(String comment) {
 		managedBufferFile.setVersionComment(comment);
 	}
 
 	@Override
 	public RemoteBufferFileHandle getNextChangeDataFile(boolean getFirst) throws IOException {
-		LocalBufferFile cf = (LocalBufferFile) managedBufferFile.getNextChangeDataFile(getFirst);
-		return cf != null ? new RemoteBufferFileImpl(cf, owner, associatedFilePath) : null;
+		try {
+			LocalBufferFile cf =
+				(LocalBufferFile) managedBufferFile.getNextChangeDataFile(getFirst);
+			return cf != null ? new RemoteBufferFileImpl(cf, owner, associatedFilePath) : null;
+		}
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t,
+				"getNextChangeDataFile: " + associatedFilePath, user);
+		}
 	}
 
 	@Override
 	public RemoteBufferFileHandle getSaveChangeDataFile() throws IOException {
-		LocalBufferFile cf = (LocalBufferFile) managedBufferFile.getSaveChangeDataFile();
-		return cf != null ? new RemoteBufferFileImpl(cf, owner, associatedFilePath) : null;
+		try {
+			LocalBufferFile cf = (LocalBufferFile) managedBufferFile.getSaveChangeDataFile();
+			return cf != null ? new RemoteBufferFileImpl(cf, owner, associatedFilePath) : null;
+		}
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t,
+				"getSaveChangeDataFile: " + associatedFilePath, user);
+		}
 	}
 
 	@Override
-	public long getCheckinID() throws IOException {
+	public long getCheckinID() {
 		return managedBufferFile.getCheckinID();
 	}
 
 	@Override
 	public byte[] getForwardModMapData(int oldVersion) throws IOException {
-		return managedBufferFile.getForwardModMapData(oldVersion);
+		try {
+			return managedBufferFile.getForwardModMapData(oldVersion);
+		}
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t,
+				"getForwardModMapData: " + associatedFilePath, user);
+		}
 	}
 
 	@Override
@@ -111,14 +142,21 @@ public class RemoteManagedBufferFileImpl extends RemoteBufferFileImpl
 	@Override
 	public BlockStreamHandle<InputBlockStream> getInputBlockStreamHandle(byte[] changeMapData)
 			throws IOException {
-		BlockStreamServer blockStreamServer = BlockStreamServer.getBlockStreamServer();
-		InputBlockStream inputBlockStream = managedBufferFile.getInputBlockStream(changeMapData);
-		RemoteInputBlockStreamHandle streamHandle =
-			new RemoteInputBlockStreamHandle(blockStreamServer, inputBlockStream);
-		if (!blockStreamServer.registerBlockStream(streamHandle, inputBlockStream)) {
-			throw new IOException("request failed: block stream server not running");
+		try {
+			BlockStreamServer blockStreamServer = BlockStreamServer.getBlockStreamServer();
+			InputBlockStream inputBlockStream =
+				managedBufferFile.getInputBlockStream(changeMapData);
+			RemoteInputBlockStreamHandle streamHandle =
+				new RemoteInputBlockStreamHandle(blockStreamServer, inputBlockStream);
+			if (!blockStreamServer.registerBlockStream(streamHandle, inputBlockStream)) {
+				throw new IOException("request failed: block stream server not running");
+			}
+			return streamHandle;
 		}
-		return streamHandle;
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t,
+				"getInputBlockStream with map: " + associatedFilePath, user);
+		}
 	}
 
 }

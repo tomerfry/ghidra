@@ -35,7 +35,7 @@ To install an official pre-built multi-platform Ghidra release:
 * Extract the Ghidra release file
   - **NOTE:** Do not extract on top of an existing installation
 * Launch Ghidra: `./ghidraRun` (`ghidraRun.bat` for Windows)
-  - or launch [PyGhidra][pyghidra]: `./support/pyGhidraRun` (`support\pyGhidraRun.bat` for Windows)
+  - or launch [PyGhidra][pyghidra]: `./support/pyghidraRun` (`support\pyghidraRun.bat` for Windows)
 
 For additional information and troubleshooting tips about installing and running a Ghidra release, 
 please refer to the [Getting Started][gettingstarted] document which can be found at the root of a 

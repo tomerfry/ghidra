@@ -4,16 +4,16 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package db.buffers;
+package ghidra.server.remote;
 
 import java.io.IOException;
 import java.rmi.NoSuchObjectException;
@@ -22,9 +22,9 @@ import java.rmi.server.UnicastRemoteObject;
 import java.rmi.server.Unreferenced;
 import java.util.*;
 
+import db.buffers.*;
 import ghidra.framework.remote.RemoteRepositoryHandle;
 import ghidra.server.RepositoryManager;
-import ghidra.server.remote.*;
 import ghidra.server.stream.*;
 
 /**
@@ -44,6 +44,7 @@ public class RemoteBufferFileImpl extends UnicastRemoteObject
 		new HashMap<>();
 
 	protected final RepositoryHandleImpl owner;
+	protected final String user;
 	protected final String associatedFilePath;
 
 	private final String clientHost;
@@ -56,7 +57,7 @@ public class RemoteBufferFileImpl extends UnicastRemoteObject
 	 * @param bufferFile buffer file
 	 * @param owner owner object to which this instance should be associated.
 	 * @param associatedFilePath repository path of file item associated with this buffer file
-	 * @throws RemoteException
+	 * @throws RemoteException if failed to instantiate remote object
 	 */
 	public RemoteBufferFileImpl(LocalBufferFile bufferFile, RepositoryHandleImpl owner,
 			String associatedFilePath) throws RemoteException {
@@ -68,6 +69,7 @@ public class RemoteBufferFileImpl extends UnicastRemoteObject
 		if (owner == null || associatedFilePath == null) {
 			throw new IllegalArgumentException("Missing one or more required arguments");
 		}
+		this.user = owner.getUser().getName();
 		this.clientHost = RepositoryManager.getRMIClient();
 		addInstance(this);
 	}
@@ -155,7 +157,7 @@ public class RemoteBufferFileImpl extends UnicastRemoteObject
 	}
 
 	/**
-	 * Return user name@host associated with open file handle.
+	 * {@return username@host associated with open file handle}
 	 */
 	public String getUserClient() {
 		if (clientHost != null) {
@@ -166,7 +168,9 @@ public class RemoteBufferFileImpl extends UnicastRemoteObject
 
 	/**
 	 * Returns list of users with open handles associated with the specified filePath.
-	 * @param filePath file path
+	 * @param repoName repository name
+	 * @param filePath repository file path
+	 * @return users with open file handles
 	 */
 	public static String[] getOpenFileUsers(String repoName, String filePath) {
 		String filePathKey = getFilePathKey(repoName, filePath);
@@ -218,63 +222,75 @@ public class RemoteBufferFileImpl extends UnicastRemoteObject
 	}
 
 	@Override
-	public int getParameter(String name) throws NoSuchElementException, IOException {
+	public int getParameter(String name) throws NoSuchElementException {
+		// NOTE: NoSuchElementException will get encapsulated within a RemoteException
 		return bufferFile.getParameter(name);
 	}
 
 	@Override
-	public void setParameter(String name, int value) throws IOException {
+	public void setParameter(String name, int value) {
 		bufferFile.setParameter(name, value);
 	}
 
 	@Override
-	public void clearParameters() throws IOException {
+	public void clearParameters() {
 		bufferFile.clearParameters();
 	}
 
 	@Override
-	public String[] getParameterNames() throws IOException {
+	public String[] getParameterNames() {
 		return bufferFile.getParameterNames();
 	}
 
 	@Override
-	public int getBufferSize() throws IOException {
+	public int getBufferSize() {
 		return bufferFile.getBufferSize();
 	}
 
 	@Override
-	public int getIndexCount() throws IOException {
+	public int getIndexCount() {
 		return bufferFile.getIndexCount();
 	}
 
 	@Override
-	public int[] getFreeIndexes() throws IOException {
+	public int[] getFreeIndexes() {
 		return bufferFile.getFreeIndexes();
 	}
 
 	@Override
-	public void setFreeIndexes(int[] indexes) throws IOException {
+	public void setFreeIndexes(int[] indexes) {
 		bufferFile.setFreeIndexes(indexes);
 	}
 
 	@Override
-	public boolean isReadOnly() throws IOException {
+	public boolean isReadOnly() {
 		return bufferFile.isReadOnly();
 	}
 
 	@Override
 	public boolean setReadOnly() throws IOException {
-		return bufferFile.setReadOnly();
+		try {
+			return bufferFile.setReadOnly();
+		}
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t, "setReadOnly: " + associatedFilePath,
+				user);
+		}
 	}
 
 	@Override
 	public void close() throws IOException {
-		bufferFile.close();
-		dispose();
+		try {
+			bufferFile.close();
+			dispose();
+		}
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t, "close: " + associatedFilePath, user);
+		}
 	}
 
 	@Override
-	public boolean delete() throws IOException {
+	public boolean delete() {
 		boolean rc = false;
 		try {
 			rc = bufferFile.delete();
@@ -287,12 +303,24 @@ public class RemoteBufferFileImpl extends UnicastRemoteObject
 
 	@Override
 	public DataBuffer get(int index) throws IOException {
-		return bufferFile.get(new DataBuffer(), index);
+		try {
+			return bufferFile.get(new DataBuffer(), index);
+		}
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t,
+				"get(" + index + "): " + associatedFilePath, user);
+		}
 	}
 
 	@Override
 	public void put(DataBuffer buf, int index) throws IOException {
-		bufferFile.put(buf, index);
+		try {
+			bufferFile.put(buf, index);
+		}
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t,
+				"put(" + index + "): " + associatedFilePath, user);
+		}
 	}
 
 	@Override
@@ -307,27 +335,39 @@ public class RemoteBufferFileImpl extends UnicastRemoteObject
 
 	@Override
 	public BlockStreamHandle<InputBlockStream> getInputBlockStreamHandle() throws IOException {
-		BlockStreamServer blockStreamServer = BlockStreamServer.getBlockStreamServer();
-		InputBlockStream inputBlockStream = bufferFile.getInputBlockStream();
-		RemoteInputBlockStreamHandle streamHandle =
-			new RemoteInputBlockStreamHandle(blockStreamServer, inputBlockStream);
-		if (!blockStreamServer.registerBlockStream(streamHandle, inputBlockStream)) {
-			throw new IOException("request failed: block stream server not running");
+		try {
+			BlockStreamServer blockStreamServer = BlockStreamServer.getBlockStreamServer();
+			InputBlockStream inputBlockStream = bufferFile.getInputBlockStream();
+			RemoteInputBlockStreamHandle streamHandle =
+				new RemoteInputBlockStreamHandle(blockStreamServer, inputBlockStream);
+			if (!blockStreamServer.registerBlockStream(streamHandle, inputBlockStream)) {
+				throw new IOException("request failed: block stream server not running");
+			}
+			return streamHandle;
 		}
-		return streamHandle;
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t,
+				"getInputBlockStreamHandle: " + associatedFilePath, user);
+		}
 	}
 
 	@Override
 	public BlockStreamHandle<OutputBlockStream> getOutputBlockStreamHandle(int blockCount)
 			throws IOException {
-		BlockStreamServer blockStreamServer = BlockStreamServer.getBlockStreamServer();
-		OutputBlockStream outputBlockStream = bufferFile.getOutputBlockStream(blockCount);
-		RemoteOutputBlockStreamHandle streamHandle = new RemoteOutputBlockStreamHandle(
-			blockStreamServer, blockCount, outputBlockStream.getBlockSize());
-		if (!blockStreamServer.registerBlockStream(streamHandle, outputBlockStream)) {
-			throw new IOException("request failed: block stream server not running");
+		try {
+			BlockStreamServer blockStreamServer = BlockStreamServer.getBlockStreamServer();
+			OutputBlockStream outputBlockStream = bufferFile.getOutputBlockStream(blockCount);
+			RemoteOutputBlockStreamHandle streamHandle = new RemoteOutputBlockStreamHandle(
+				blockStreamServer, blockCount, outputBlockStream.getBlockSize());
+			if (!blockStreamServer.registerBlockStream(streamHandle, outputBlockStream)) {
+				throw new IOException("request failed: block stream server not running");
+			}
+			return streamHandle;
 		}
-		return streamHandle;
+		catch (Throwable t) {
+			throw RemoteExceptionUtil.dispatchIOException(t,
+				"getOutputBlockStreamHandle: " + associatedFilePath, user);
+		}
 	}
 
 }

@@ -31,8 +31,8 @@ import org.apache.logging.log4j.*;
 import ghidra.framework.remote.GhidraPrincipal;
 import ghidra.framework.remote.SignatureCallback;
 import ghidra.net.*;
-import ghidra.server.RepositoryManager;
 import ghidra.server.UserManager;
+import ghidra.server.remote.RemoteLoggingUtil;
 
 /**
  * <code>PKIAuthenticationModule</code> performs client authentication through the 
@@ -203,7 +203,7 @@ public class PKIAuthenticationModule implements AuthenticationModule {
 			}
 
 			if (UserManager.ANONYMOUS_USERNAME.equals(username)) {
-				RepositoryManager.log(null, null, "Anonymous access allowed for: " +
+				RemoteLoggingUtil.log("Anonymous access allowed for: " +
 					certChain[0].getSubjectX500Principal().toString(), user.getName());
 			}
 

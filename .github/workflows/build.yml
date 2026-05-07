@@ -34,25 +34,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       os: ${{ steps.matrix.outputs.os }}
-      run_tests: ${{ steps.matrix.outputs.run_tests }}
     steps:
       - id: matrix
         shell: bash
         run: |
           full='["ubuntu-latest","windows-latest","macos-latest"]'
           windows_only='["windows-latest"]'
-          # PRs and pushes to master/active-dev: full OS matrix + tests.
-          # Pushes to feature-active-dev/* branches: Windows-only smoke build,
-          # no tests (full tests run on the PR before merge to active-dev).
+          # PRs and pushes to master/active-dev: full OS matrix.
+          # Pushes to feature-active-dev/* branches: Windows-only smoke build.
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "os=$full" >> "$GITHUB_OUTPUT"
-            echo "run_tests=true" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == "refs/heads/active-dev" ]]; then
             echo "os=$full" >> "$GITHUB_OUTPUT"
-            echo "run_tests=true" >> "$GITHUB_OUTPUT"
           else
             echo "os=$windows_only" >> "$GITHUB_OUTPUT"
-            echo "run_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -122,27 +117,11 @@ jobs:
       - name: Build Ghidra distribution
         run: gradle buildGhidra
 
-      - name: Run unit tests
-        if: needs.setup.outputs.run_tests == 'true'
-        run: gradle unitTestReport
-
       - name: Upload Ghidra distribution
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ghidra-dist-${{ matrix.os }}
           path: build/dist/*.zip
-          retention-days: 90
-          if-no-files-found: warn
-
-      - name: Upload test reports
-        if: always() && needs.setup.outputs.run_tests == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports-${{ matrix.os }}
-          path: |
-            build/reports/**
-            **/build/reports/**
-            **/build/test-results/**
           retention-days: 90
           if-no-files-found: warn

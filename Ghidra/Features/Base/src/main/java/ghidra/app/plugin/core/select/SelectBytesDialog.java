@@ -31,38 +31,35 @@ import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.address.*;
 import ghidra.program.util.ProgramSelection;
 import ghidra.util.HelpLocation;
+import ghidra.util.Msg;
 import ghidra.util.layout.PairLayout;
 
 /**
- * Class to set up dialog box that will enable the user
- * to set the available options for block selection
+ * Dialog for making program selections
  */
-class SelectBlockDialog extends ReusableDialogComponentProvider {
-	private static final String OVERFLOW_SELECTION_WARNING =
-		"Selection is larger than available " + "bytes, using the end of the address space";
+class SelectBytesDialog extends ReusableDialogComponentProvider {
+
+	private PluginTool tool;
+	private Navigatable navigatable;
 
 	private JTextField toAddressField;
-	private IntegerTextField numberInputField; // AddressInput allows decimal and hex input 
+	private IntegerTextField lengthField;
 	private JRadioButton forwardButton;
 	private JRadioButton backwardButton;
 	private JRadioButton allButton;
 	private JRadioButton toButton;
-	private Navigatable navigatable;
-	private PluginTool tool;
 
-	SelectBlockDialog(PluginTool tool, Navigatable navigatable) {
+	SelectBytesDialog(PluginTool tool, Navigatable navigatable) {
 		super("Select Bytes", false, true, true, false);
 		this.tool = tool;
 		this.navigatable = navigatable;
-//		navigatable.addNavigatableListener(this);
 
 		addWorkPanel(buildPanel());
 		addOKButton();
 		setOkButtonText("Select Bytes");
 		addDismissButton();
-		setHelpLocation(new HelpLocation("SelectBlockPlugin", "Select_Block_Help"));
+		setHelpLocation(new HelpLocation("SelectBytesPlugin", "Select_Bytes_Help"));
 
-		// make sure the state of the widgets is correct
 		setItemsEnabled(false);
 		forwardButton.doClick();
 	}
@@ -75,14 +72,13 @@ class SelectBlockDialog extends ReusableDialogComponentProvider {
 		gbc.insets = new Insets(2, 2, 2, 2);
 		gbc.gridx = 0;
 		gbc.gridy = 0;
-		mainPanel.add(methodPanel(), gbc);
+		mainPanel.add(buildMethodPanel(), gbc);
 		gbc.gridx++;
-		mainPanel.add(buildBlockPanel(), gbc);
-		mainPanel.getAccessibleContext().setAccessibleName("Select Block");
+		mainPanel.add(buildInputPanel(), gbc);
 		return mainPanel;
 	}
 
-	private JPanel buildBlockPanel() {
+	private JPanel buildInputPanel() {
 		JPanel main = new JPanel();
 		main.setBorder(BorderFactory.createTitledBorder("Byte Selection"));
 
@@ -94,16 +90,13 @@ class SelectBlockDialog extends ReusableDialogComponentProvider {
 		main.add(toAddressField);
 
 		main.add(new GLabel("Length: "));
-		numberInputField = new IntegerTextField(10);
-		numberInputField.getComponent().getAccessibleContext().setAccessibleName("Number Input");
-		numberInputField.setMaxValue(BigInteger.valueOf(Integer.MAX_VALUE));
-		numberInputField.setMinValue(BigInteger.ZERO);
-		main.add(numberInputField.getComponent());
-		main.getAccessibleContext().setAccessibleName("Block");
+		lengthField = new IntegerTextField(10);
+		lengthField.getComponent().getAccessibleContext().setAccessibleName("Number Input");
+		lengthField.setMinValue(BigInteger.ZERO);
 		return main;
 	}
 
-	private JPanel methodPanel() {
+	private JPanel buildMethodPanel() {
 		ButtonGroup buttonGroup = new ButtonGroup();
 		JPanel main = new JPanel();
 		main.setBorder(BorderFactory.createTitledBorder("By Method"));
@@ -169,9 +162,18 @@ class SelectBlockDialog extends ReusableDialogComponentProvider {
 		navigatable = null;
 	}
 
+	void setNavigatable(Navigatable navigatable) {
+		this.navigatable = navigatable;
+		setOkEnabled(navigatable != null);
+	}
+
 	void show(ComponentProvider provider) {
 		tool.showDialog(this, provider);
 		repack();
+	}
+
+	void setLength(int length) {
+		lengthField.setText(Integer.toString(length));
 	}
 
 	private void setItemsEnabled(boolean enabled) {
@@ -187,188 +189,147 @@ class SelectBlockDialog extends ReusableDialogComponentProvider {
 
 	private void setLengthInputEnabled(boolean enabled) {
 		if (!enabled) {
-			numberInputField.setValue(null);
+			lengthField.setValue(null);
 		}
-		numberInputField.setEnabled(enabled);
+		lengthField.setEnabled(enabled);
 
 	}
 
 	@Override
 	protected void okCallback() {
 		if (toButton.isSelected()) {
-			handleToAddressSelection();
+			selectToAddress();
 		}
 		else if (allButton.isSelected()) {
-			handleAllSelection();
+			selectAll();
 		}
 		else if (forwardButton.isSelected()) {
-			handleForwardSelection();
+			createSelection(true);
 		}
 		else if (backwardButton.isSelected()) {
-			handleBackwardSelection();
+			createSelection(false);
 		}
 		else {
 			setStatusText("You must choose the type of selection to make");
 		}
 	}
 
-	private void handleAllSelection() {
+	private void selectAll() {
 		AddressSetView addressSet = navigatable.getProgram().getMemory();
 		ProgramSelection selection = new ProgramSelection(addressSet);
 		NavigationUtils.setSelection(tool, navigatable, selection);
 		clearStatusText();
 	}
 
-	private void handleToAddressSelection() {
-		Address toAddress = null;
+	private void selectToAddress() {
+
 		String addressValue = toAddressField.getText();
 		clearStatusText();
 
 		// make sure the order of the addresses is correct
 		Address currentAddress = navigatable.getLocation().getAddress();
+		Address to = null;
 		try {
-			toAddress = currentAddress.getAddress(addressValue);
+			to = currentAddress.getAddress(addressValue);
 		}
 		catch (AddressFormatException e) {
 			// use the fact that toAddress remains null
 		}
-		if (toAddress == null) {
+
+		if (to == null) {
 			setStatusText("Invalid address value, enter another address");
 			return;
 		}
-		if (toAddress.compareTo(currentAddress) < 0) {
-			Address tmp = toAddress;
-			toAddress = currentAddress;
+
+		if (to.compareTo(currentAddress) < 0) {
+			Address tmp = to;
+			to = currentAddress;
 			currentAddress = tmp;
 		}
-		AddressSet addressSet = new AddressSet(currentAddress, toAddress);
+		AddressSet addressSet = new AddressSet(currentAddress, to);
 		ProgramSelection selection = new ProgramSelection(addressSet);
 		NavigationUtils.setSelection(tool, navigatable, selection);
 	}
 
-	private void handleForwardSelection() {
-		// value is a length
-		int length = numberInputField.getIntValue(); // throws NFE
-		if (length == 0) {
+	private void createSelection(boolean forward) {
+		BigInteger length = lengthField.getValue();
+		if (length == null || length == BigInteger.ZERO) {
 			setStatusText("length must be > 0");
 			return;
 		}
 
 		clearStatusText();
 
-		Address currentAddress = navigatable.getLocation().getAddress();
-
-		AddressSet addressSet = new AddressSet(navigatable.getSelection());
-
-		if (addressSet.isEmpty()) {
-			addressSet.addRange(currentAddress, currentAddress);
+		AddressSet startSet;
+		ProgramSelection currentSelection = navigatable.getSelection();
+		if (!currentSelection.isEmpty()) {
+			startSet = new AddressSet(currentSelection);
+		}
+		else {
+			Address currentAddress = navigatable.getLocation().getAddress();
+			startSet = new AddressSet(currentAddress);
 		}
 
-		AddressRangeIterator aiter = addressSet.getAddressRanges();
+		AddressRangeIterator it = startSet.getAddressRanges();
 		AddressSet newSet = new AddressSet();
-		while (aiter.hasNext()) {
-			AddressRange range = aiter.next();
-			Address toAddress = createForwardToAddress(range.getMinAddress(), length - 1);
-			if (toAddress != null) {
-				newSet.addRange(range.getMinAddress(), toAddress);
+		while (it.hasNext()) {
+			AddressRange range = it.next();
+
+			if (forward) {
+				Address from = range.getMinAddress();
+				createForwardRange(newSet, from, length);
+			}
+			else {
+				Address to = range.getMaxAddress();
+				createBackwardRange(newSet, to, length);
 			}
 		}
-		ProgramSelection selection = new ProgramSelection(newSet);
-		NavigationUtils.setSelection(tool, navigatable, selection);
+
+		ProgramSelection newSelection = new ProgramSelection(newSet);
+		NavigationUtils.setSelection(tool, navigatable, newSelection);
 	}
 
-	private void handleBackwardSelection() {
-		// value is a length
-		int length = numberInputField.getIntValue();
-		if (length == 0) {
-			setStatusText("length must be > 0");
-			return;
-		}
-		clearStatusText();
-
-		Address currentAddress = navigatable.getLocation().getAddress();
-		AddressSet addressSet = new AddressSet(navigatable.getSelection());
-		if (addressSet.isEmpty()) {
-			addressSet.addRange(currentAddress, currentAddress);
-		}
-
-		AddressRangeIterator aiter = addressSet.getAddressRanges();
-		AddressSet newSet = new AddressSet();
-		while (aiter.hasNext()) {
-			AddressRange range = aiter.next();
-
-			Address fromAddress = createBackwardToAddress(range.getMaxAddress(), length - 1);
-			if (fromAddress != null) {
-				newSet.addRange(fromAddress, range.getMaxAddress());
-			}
-		}
-		ProgramSelection selection = new ProgramSelection(newSet);
-		NavigationUtils.setSelection(tool, navigatable, selection);
+	private void createForwardRange(AddressSet set, Address from, BigInteger length) {
+		Address to = getToAddress(from, length);
+		set.addRange(from, to);
 	}
 
-	private Address createBackwardToAddress(Address toAddress, long length) {
-		AddressSpace addressSpace = toAddress.getAddressSpace();
-		if (addressSpace.isOverlaySpace()) {
-			OverlayAddressSpace oas = (OverlayAddressSpace) addressSpace;
-			AddressRange range = oas.getOverlayAddressSet().getRangeContaining(toAddress);
-			if (range == null) {
-				showWarningDialog(OVERFLOW_SELECTION_WARNING);
-				return toAddress;
-			}
-			long avail = toAddress.subtract(range.getMinAddress());
-			if (avail < (length - 1)) {
-				showWarningDialog(OVERFLOW_SELECTION_WARNING);
-				return range.getMinAddress();
-			}
-		}
+	private void createBackwardRange(AddressSet set, Address to, BigInteger length) {
+		Address from = getFromAddress(to, length);
+		set.addRange(from, to);
+	}
 
-		Address addr = null;
+	private Address getFromAddress(Address to, BigInteger length) {
+
+		// subtract one to be inclusive; address ranges are inclusive
+		BigInteger inclusiveLength = length.subtract(BigInteger.ONE);
 		try {
-			addr = toAddress.subtractNoWrap(length);
+			return to.subtractNoWrap(inclusiveLength);
 		}
-		catch (AddressOverflowException aoobe) {
-			showWarningDialog(OVERFLOW_SELECTION_WARNING);
-			addr = addressSpace.getMinAddress();
+		catch (AddressOverflowException e) {
+			showWarningDialog();
+			AddressSpace space = to.getAddressSpace();
+			return space.getMinAddress();
 		}
-
-		return addr;
 	}
 
-	private Address createForwardToAddress(Address fromAddress, long length) {
+	private Address getToAddress(Address from, BigInteger length) {
 
-		AddressSpace addressSpace = fromAddress.getAddressSpace();
-		if (addressSpace.isOverlaySpace()) {
-			OverlayAddressSpace oas = (OverlayAddressSpace) addressSpace;
-			AddressRange range = oas.getOverlayAddressSet().getRangeContaining(fromAddress);
-			if (range == null) {
-				showWarningDialog(OVERFLOW_SELECTION_WARNING);
-				return fromAddress;
-			}
-			long avail = range.getMaxAddress().subtract(fromAddress);
-			if (avail < (length - 1)) {
-				showWarningDialog(OVERFLOW_SELECTION_WARNING);
-				return range.getMaxAddress();
-			}
-		}
-
-		Address addr = null;
+		// subtract one to be inclusive; address ranges are inclusive
+		BigInteger inclusiveLength = length.subtract(BigInteger.ONE);
 		try {
-			addr = fromAddress.addNoWrap(length);
+			return from.addNoWrap(inclusiveLength);
 		}
-		catch (AddressOverflowException aoobe) {
-			showWarningDialog(OVERFLOW_SELECTION_WARNING);
-			addr = addressSpace.getMaxAddress();
+		catch (AddressOverflowException e) {
+			showWarningDialog();
+			AddressSpace space = from.getAddressSpace();
+			return space.getMaxAddress();
 		}
-
-		return addr;
 	}
 
-	private void showWarningDialog(final String text) {
-		SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(getComponent(), text));
+	private void showWarningDialog() {
+		Msg.showWarn(this, getComponent(), "Selection Overflow",
+			"Selection is larger than available bytes. Using the boundary of the address space.");
 	}
 
-	public void setNavigatable(Navigatable navigatable) {
-		this.navigatable = navigatable;
-		setOkEnabled(navigatable != null);
-	}
 }

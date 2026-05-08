@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,12 +30,7 @@ import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.util.HelpLocation;
 
 /**
- * This plugin class contains the structure needed for the user to
- * select blocks of data anywhere inside of the Code Browser and Byte Viewer.
- * <p>
- * Note:  This plugin used to refer to selections as blocks instead of lengths
- * of bytes.  The GUI has been changed, but the internal comments and 
- * variable names have not.
+ * This plugin allows users to select bytes anywhere inside of the Code Browser and Byte Viewer.
  */
 //@formatter:off
 @PluginInfo(
@@ -43,16 +38,15 @@ import ghidra.util.HelpLocation;
 	packageName = CorePluginPackage.NAME,
 	category = PluginCategoryNames.COMMON,
 	shortDescription = "Select Bytes",
-	description = "Allows the user to select different size "
-			+ "lengths of bytes from the Byte Viewer "
+	description = "Allows the user to select different size lengths of bytes, "
 			+ "generally starting from the cursor position or entire file"
 )
 //@formatter:on
-public class SelectBlockPlugin extends Plugin {
-	private DockingAction toolBarAction;
-	private SelectBlockDialog dialog;
+public class SelectBytesPlugin extends Plugin {
+	private DockingAction action;
+	private SelectBytesDialog dialog;
 
-	public SelectBlockPlugin(PluginTool tool) {
+	public SelectBytesPlugin(PluginTool tool) {
 		super(tool);
 		createActions();
 	}
@@ -68,7 +62,7 @@ public class SelectBlockPlugin extends Plugin {
 
 	private void createActions() {
 
-		toolBarAction = new NavigatableContextAction("SelectBlock", getName()) {
+		action = new NavigatableContextAction("SelectBytes", getName()) {
 			@Override
 			public void actionPerformed(NavigatableActionContext context) {
 				showDialog(context.getComponentProvider(), context.getNavigatable());
@@ -84,13 +78,13 @@ public class SelectBlockPlugin extends Plugin {
 			new MenuData(new String[] { ToolConstants.MENU_SELECTION, "Bytes..." }, null,
 				"Select Group 2");
 		menuData.setMenuSubGroup("1");
-		toolBarAction.setMenuBarData(menuData);
-		toolBarAction.addToWindowWhen(NavigatableActionContext.class);
+		action.setMenuBarData(menuData);
+		action.addToWindowWhen(NavigatableActionContext.class);
 
-		toolBarAction.setEnabled(false);
-		toolBarAction.setDescription("Allows user to select blocks of data.");
-		toolBarAction.setHelpLocation(new HelpLocation("SelectBlockPlugin", "Select_Block_Help"));
-		tool.addAction(toolBarAction);
+		action.setEnabled(false);
+		action.setDescription("Allows user to select bytes of data.");
+		action.setHelpLocation(new HelpLocation("SelectBytesPlugin", "Select_Bytes_Help"));
+		tool.addAction(action);
 	}
 
 	protected void updateNavigatable(ActionContext context) {
@@ -109,7 +103,7 @@ public class SelectBlockPlugin extends Plugin {
 		if (dialog != null) {
 			dialog.close();
 		}
-		dialog = new SelectBlockDialog(tool, navigatable);
+		dialog = new SelectBytesDialog(tool, navigatable);
 		dialog.show(provider);
 	}
 

@@ -187,9 +187,13 @@ public class PluginDescription implements Comparable<PluginDescription> {
 	 */
 	public boolean isInExtension() {
 		
-		Path myPath = null;
+		String myPath = null;
 		try {
-			myPath = Path.of(url.toURI());
+			// NOTE: must use convertToSourceLocation() here, and not Path.of(url.toURI()).  The
+			// url for any jar-hosted plugin uses the 'jar' protocol, and Path.of() will hand that
+			// off to the zip filesystem provider, which throws an unchecked
+			// FileSystemNotFoundException when no filesystem has been created for the jar.
+			myPath = convertToSourceLocation(url);
 		} 
 		catch (URISyntaxException e) {
 			Msg.error(this, "Invalid URL for PluginDescription: " + url, e);
@@ -198,7 +202,7 @@ public class PluginDescription implements Comparable<PluginDescription> {
 		
 		ApplicationLayout layout = Application.getApplicationLayout();
 		List<ResourceFile> extDirs = layout.getExtensionInstallationDirs();
-		return FileUtilities.startsWith(extDirs, myPath.toString());
+		return FileUtilities.startsWith(extDirs, myPath);
 	}
 
 	/**

@@ -20,6 +20,9 @@
  */
 package ghidra.app.plugin.core.analysis;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import ghidra.app.plugin.core.disassembler.AddressTable;
 import ghidra.app.services.*;
 import ghidra.app.util.importer.MessageLog;
@@ -102,6 +105,7 @@ public class ScalarOperandAnalyzer extends AbstractAnalyzer {
 	void checkOperands(Program program, Instruction instr) {
 		// Check for scalar operands that are a valid address
 		//
+		List<Address> relocationAddresses = null;
 		for (int i = 0; i < instr.getNumOperands(); i++) {
 			Object objs[] = instr.getOpObjects(i);
 			for (int j = 0; j < objs.length; j++) {
@@ -111,42 +115,41 @@ public class ScalarOperandAnalyzer extends AbstractAnalyzer {
 				Scalar scalar = (Scalar) objs[j];
 
 				//if a relocation exists, assume this is a valid address
-				RelocationTable relocTable = program.getRelocationTable();
+				if (relocationAddresses == null) {
+					relocationAddresses = getRelocationAddresses(program, instr);
+				}
 				boolean found = false;
-				for (int r = 0; r < instr.getLength(); ++r) {
-					Address addr = instr.getMinAddress().add(r);
-					if (relocTable.hasRelocation(addr)) {
-						try {
-							switch (scalar.bitLength()) {
-								case 8:
-									if (program.getMemory().getByte(addr) == scalar
-											.getSignedValue()) {
-										found = true;
-									}
-									break;
-								case 16:
-									if (program.getMemory().getShort(addr) == scalar
-											.getSignedValue()) {
-										found = true;
-									}
-									break;
-								case 32:
-									if (program.getMemory().getInt(addr) == scalar
-											.getSignedValue()) {
-										found = true;
-									}
-									break;
-								case 64:
-									if (program.getMemory().getLong(addr) == scalar
-											.getSignedValue()) {
-										found = true;
-									}
-									break;
-							}
+				for (Address addr : relocationAddresses) {
+					try {
+						switch (scalar.bitLength()) {
+							case 8:
+								if (program.getMemory().getByte(addr) == scalar
+										.getSignedValue()) {
+									found = true;
+								}
+								break;
+							case 16:
+								if (program.getMemory().getShort(addr) == scalar
+										.getSignedValue()) {
+									found = true;
+								}
+								break;
+							case 32:
+								if (program.getMemory().getInt(addr) == scalar
+										.getSignedValue()) {
+									found = true;
+								}
+								break;
+							case 64:
+								if (program.getMemory().getLong(addr) == scalar
+										.getSignedValue()) {
+									found = true;
+								}
+								break;
 						}
-						catch (MemoryAccessException e) {
-							// don't care, squelch it.
-						}
+					}
+					catch (MemoryAccessException e) {
+						// don't care, squelch it.
 					}
 				}
 
@@ -176,6 +179,34 @@ public class ScalarOperandAnalyzer extends AbstractAnalyzer {
 				}
 			}
 		}
+	}
+
+	private List<Address> getRelocationAddresses(Program program, Instruction instr) {
+		RelocationTable relocationTable = program.getRelocationTable();
+		if (relocationTable.getSize() == 0) {
+			return List.of();
+		}
+
+		// Seek between relocation addresses instead of querying the database for every byte.
+		// Keep this local to the instruction so later analysis sees relocation table changes.
+		List<Address> addresses = new ArrayList<>();
+		Address start = instr.getMinAddress();
+		Address end = start.add(instr.getLength() - 1);
+		if (relocationTable.hasRelocation(start)) {
+			addresses.add(start);
+		}
+		if (start.equals(end)) {
+			return addresses;
+		}
+		Address address = relocationTable.getRelocationAddressAfter(start);
+		while (address != null && address.compareTo(end) <= 0) {
+			addresses.add(address);
+			if (address.equals(end)) {
+				break;
+			}
+			address = relocationTable.getRelocationAddressAfter(address);
+		}
+		return addresses;
 	}
 
 	/**

@@ -165,6 +165,7 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 		if (options.isDisplayLineNumbers()) {
 			addMarginProvider(lineNumbersMargin = new LineNumberDecompilerMarginProvider());
 		}
+		addMarginProvider(new FoldingDecompilerMarginProvider());
 	}
 
 	public DecompilerController getController() {
@@ -687,6 +688,7 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 
 		// -1 since the FieldPanel is 0-based; we are 1-based
 		int lineNumber = line.getLineNumber() - 1;
+		layoutController.revealLine(lineNumber);
 		int column = offset;
 		FieldLocation start = getCursorPosition();
 
@@ -1520,6 +1522,20 @@ public class DecompilerPanel extends JPanel implements FieldMouseListener, Field
 	}
 
 	private class DecompilerFieldPanel extends FieldPanel {
+
+		@Override
+		protected void goTo(BigInteger index, int fieldNum, int row, int col,
+				boolean alwaysCenterCursor, EventTrigger trigger) {
+			layoutController.revealLine(index.intValue());
+			super.goTo(index, fieldNum, row, col, alwaysCenterCursor, trigger);
+		}
+
+		@Override
+		public boolean setCursorPosition(BigInteger index, int fieldNum, int row, int col,
+				EventTrigger trigger) {
+			layoutController.revealLine(index.intValue());
+			return super.setCursorPosition(index, fieldNum, row, col, trigger);
+		}
 
 		public DecompilerFieldPanel(LayoutModel model) {
 			super(model, "Decompiler");

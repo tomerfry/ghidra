@@ -501,6 +501,23 @@
 	to the target of the goto, within the function. The cursor is set and the window view is adjusted if
 	necessary to ensure that the target is visible.
       </p></dd>
+<dt><a name="ScopeFolding"></a><span class="term"><span class="bold"><strong>Scope Folding</strong></span></span></dt>
+<dd><p>
+  Click the minus control beside an opening brace to collapse the block's interior,
+  or the plus control to expand it. The opening and closing lines remain visible,
+  including any <code>else</code> or <code>while</code> on the closing line.
+  Nested blocks retain their folded state when the containing block is expanded.
+</p><p>
+  The <strong>Scope Folding</strong> right-click submenu provides <strong>Toggle Scope</strong>,
+  <strong>Collapse All Scopes</strong>, and <strong>Expand All Scopes</strong>.
+  Toggle Scope acts on the innermost visible block containing the selected line.
+  These actions support custom key bindings in Tool Options.
+</p><p>
+  Original line numbers are preserved. Navigating to hidden code, including a search result,
+  automatically expands its containing blocks. Folding only changes the display; copying
+  a selection still includes hidden lines within that selection. Fold state resets when
+  the function is decompiled again or another function is displayed.
+</p></dd>
 <dt><span class="term"><span class="bold"><strong>Braces</strong></span></span></dt>
 <dd>
 <p>

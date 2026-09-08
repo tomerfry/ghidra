@@ -104,10 +104,10 @@ public class BreakpointsDecompilerMarginProvider extends JPanel
 		BigInteger endIdx = pixmap.getIndex(visible.y + visible.height);
 
 		List<ClangLine> lines = plugin.decompilerMarginService.getDecompilerPanel().getLines();
-		for (BigInteger index = startIdx; index.compareTo(endIdx) <= 0; index =
-			index.add(BigInteger.ONE)) {
+		for (BigInteger index = startIdx; index != null && index.compareTo(endIdx) <= 0;
+				index = model.getIndexAfter(index)) {
 			int i = index.intValue();
-			if (i >= lines.size()) {
+			if (i < 0 || i >= lines.size() || model.getLayout(index) == null) {
 				continue;
 			}
 			ClangLine line = lines.get(i);

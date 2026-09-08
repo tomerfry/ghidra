@@ -100,6 +100,9 @@ public class LineNumberDecompilerMarginProvider extends JPanel
 	@Override
 	public void paint(Graphics g) {
 		super.paint(g);
+		if (model == null || pixmap == null) {
+			return;
+		}
 
 		Insets insets = getInsets();
 		int rightEdge = getWidth() - insets.right;
@@ -107,7 +110,11 @@ public class LineNumberDecompilerMarginProvider extends JPanel
 		BigInteger startIdx = pixmap.getIndex(visible.y);
 		BigInteger endIdx = pixmap.getIndex(visible.y + visible.height);
 		int ascent = g.getFontMetrics().getMaxAscent();
-		for (BigInteger i = startIdx; i.compareTo(endIdx) <= 0; i = i.add(BigInteger.ONE)) {
+		for (BigInteger i = startIdx; i != null && i.compareTo(endIdx) <= 0;
+				i = model.getIndexAfter(i)) {
+			if (model.getLayout(i) == null) {
+				continue;
+			}
 			String text = i.add(BigInteger.ONE).toString();
 			int width = g.getFontMetrics().stringWidth(text);
 			GraphicsUtils.drawString(this, g, text, rightEdge - width, pixmap.getPixel(i) + ascent);

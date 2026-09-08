@@ -45,15 +45,18 @@ public interface DecompilerMarginProvider {
 	 * line of code is rendered by the layout at index 0. The tenth is rendered by the layout at
 	 * index 9. Rarely, a line may be wrapped by the renderer, leading to a non-uniform layout. The
 	 * {@code pixmap} can map from a pixel's vertical position to the layout index at the same
-	 * position in the main panel. It accounts for scrolling an non-uniformity. It is safe to assume
-	 * the layouts render contiguous lines of C code. The recommended strategy for painting is thus:
+	 * position in the main panel. It accounts for scrolling and non-uniformity. Layout indices
+	 * refer to the original C line numbers. Folded lines have no layout; use
+	 * {@link LayoutModel#getIndexAfter(BigInteger)} to skip them. The recommended strategy for
+	 * painting is thus:
 	 * 
 	 * <ol>
 	 * <li>Compute the visible part of the margin needing repainting. See
 	 * {@link JComponent#getVisibleRect()}</li>
 	 * <li>Compute the layout indices for the vertical bounds of that part. See
 	 * {@link LayoutPixelIndexMap#getIndex(int)}</li>
-	 * <li>Iterate over the layouts within those bounds, inclusively.</li>
+	 * <li>Iterate over the layouts within those bounds, inclusively, using
+	 * {@link LayoutModel#getIndexAfter(BigInteger)}.</li>
 	 * <li>Compute the vertical position of each layout and paint something appropriate for its
 	 * corresponding line. See {@link LayoutPixelIndexMap#getPixel(BigInteger)}</li>
 	 * </ol>

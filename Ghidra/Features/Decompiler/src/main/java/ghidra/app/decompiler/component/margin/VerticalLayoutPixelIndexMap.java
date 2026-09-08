@@ -26,16 +26,18 @@ import docking.widgets.fieldpanel.support.AnchoredLayout;
  * 
  * <p>
  * This class implements {@link #getIndex(int)} in log time and {@link #getPixel(BigInteger)} in
- * constant time.
+ * log time, including when folded scopes leave gaps in the layout indices.
  */
 public class VerticalLayoutPixelIndexMap implements LayoutPixelIndexMap {
-	private BigInteger base = BigInteger.ZERO;
+	private BigInteger[] indices = new BigInteger[0];
 	private int[] yPositions = new int[0];
 	private int size;
 
 	@Override
 	public int getPixel(BigInteger index) {
-		return yPositions[index.subtract(base).intValueExact()];
+		int offset = Arrays.binarySearch(indices, 0, size, index);
+		// Hidden and off-screen lines must not paint a marker on a visible line.
+		return offset < 0 ? -Integer.MAX_VALUE : yPositions[offset];
 	}
 
 	protected int computeOff(int pixel) {
@@ -52,18 +54,21 @@ public class VerticalLayoutPixelIndexMap implements LayoutPixelIndexMap {
 
 	@Override
 	public BigInteger getIndex(int pixel) {
-		return base.add(BigInteger.valueOf(computeOff(pixel)));
+		if (size == 0) {
+			return BigInteger.ZERO;
+		}
+		return indices[Math.max(0, Math.min(size - 1, computeOff(pixel)))];
 	}
 
 	public void layoutsChanged(List<AnchoredLayout> layouts) {
 		size = layouts.size();
 		if (yPositions.length < size) {
 			yPositions = new int[size];
+			indices = new BigInteger[size];
 		}
 		int i = 0;
-		base = layouts.isEmpty() ? BigInteger.ZERO : layouts.get(0).getIndex();
 		for (AnchoredLayout l : layouts) {
-			assert l.getIndex().subtract(base).intValueExact() == i;
+			indices[i] = l.getIndex();
 			yPositions[i] = l.getYPos();
 			i++;
 		}

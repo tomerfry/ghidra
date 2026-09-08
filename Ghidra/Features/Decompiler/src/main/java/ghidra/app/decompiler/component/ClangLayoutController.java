@@ -58,6 +58,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 	private Color[] syntaxColor; // Foreground colors.
 	private BigInteger numIndexes = BigInteger.ZERO;
 	private List<ClangLine> lines = new ArrayList<>();
+	private final DecompilerFoldingModel folding = new DecompilerFoldingModel();
 
 	private boolean showLineNumbers = true;
 
@@ -97,7 +98,8 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 	@Override
 	public Layout getLayout(BigInteger index) {
-		if (index.compareTo(numIndexes) >= 0) {
+		if (index.signum() < 0 || index.compareTo(numIndexes) >= 0 ||
+			folding.isHidden(index.intValue())) {
 			return null;
 		}
 		return new SingleRowLayout(fieldList[index.intValue()]);
@@ -141,7 +143,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 	@Override
 	public BigInteger getIndexAfter(BigInteger index) {
-		BigInteger nextIndex = index.add(BigInteger.ONE);
+		BigInteger nextIndex = BigInteger.valueOf(folding.nextVisible(index.intValue()));
 		if (nextIndex.compareTo(numIndexes) >= 0) {
 			return null;
 		}
@@ -153,11 +155,52 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 		if (index.compareTo(BigInteger.ZERO) <= 0) {
 			return null;
 		}
-		return index.subtract(BigInteger.ONE);
+		return BigInteger.valueOf(folding.previousVisible(index.intValue()));
 	}
 
 	public int getIndexBefore(int index) {
-		return index - 1;
+		return folding.previousVisible(index);
+	}
+
+	public boolean isFoldable(int line) {
+		return folding.isFoldable(line);
+	}
+
+	public boolean isCollapsed(int line) {
+		return folding.isCollapsed(line);
+	}
+
+	public int getEnclosingBlock(int line) {
+		return folding.enclosingBlock(line);
+	}
+
+	public void toggleFold(int line) {
+		if (folding.isFoldable(line)) {
+			folding.toggle(line);
+			foldingChanged();
+		}
+	}
+
+	public void setAllCollapsed(boolean collapsed) {
+		folding.setAllCollapsed(collapsed);
+		foldingChanged();
+	}
+
+	public void revealLine(int line) {
+		if (folding.reveal(line)) {
+			modelChanged();
+		}
+	}
+
+	private void foldingChanged() {
+		// Move a cursor inside a newly hidden block to its visible opening line.
+		FieldLocation cursor = decompilerPanel.getCursorPosition();
+		int line = cursor.getIndex().intValue();
+		if (folding.isHidden(line)) {
+			decompilerPanel.getFieldPanel().setCursorPosition(
+				BigInteger.valueOf(folding.previousVisible(line)), 0, 0, 0);
+		}
+		modelChanged();
 	}
 
 	public ClangTokenGroup getRoot() {
@@ -283,6 +326,7 @@ public class ClangLayoutController implements LayoutModel, LayoutModelListener {
 
 		PrettyPrinter printer = new PrettyPrinter(function, docroot, null);
 		lines = printer.getLines();
+		folding.reset(lines);
 
 		int lineCount = lines.size();
 		fieldList = new Field[lineCount]; // One field for each "C" line

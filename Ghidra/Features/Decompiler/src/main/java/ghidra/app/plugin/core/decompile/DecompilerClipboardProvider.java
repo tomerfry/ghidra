@@ -18,7 +18,6 @@ package ghidra.app.plugin.core.decompile;
 import java.awt.FontMetrics;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
-import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -30,8 +29,6 @@ import org.apache.commons.lang3.StringUtils;
 import docking.ActionContext;
 import docking.ComponentProvider;
 import docking.dnd.StringTransferable;
-import docking.widgets.fieldpanel.Layout;
-import docking.widgets.fieldpanel.LayoutModel;
 import docking.widgets.fieldpanel.internal.PaintContext;
 import docking.widgets.fieldpanel.support.FieldRange;
 import docking.widgets.fieldpanel.support.FieldSelection;
@@ -235,9 +232,8 @@ public class DecompilerClipboardProvider extends ByteCopier
 			endRow = fieldRange.getEnd().getRow();
 		}
 
-		LayoutModel model = provider.getDecompilerPanel().getLayoutController();
-		Layout layout = model.getLayout(BigInteger.valueOf(lineNumber));
-		ClangTextField field = (ClangTextField) layout.getField(0);
+		ClangTextField field =
+			(ClangTextField) provider.getDecompilerPanel().getFields().get(lineNumber);
 		int numSpaces = field.getStartX() / spaceCharWidthInPixels;
 		for (int i = 0; i < numSpaces; i++) {
 			buffer.append(' ');
@@ -264,9 +260,8 @@ public class DecompilerClipboardProvider extends ByteCopier
 		int startRow = fieldRange.getStart().getRow();
 		int endRow = fieldRange.getEnd().getRow();
 
-		LayoutModel model = provider.getDecompilerPanel().getLayoutController();
-		Layout layout = model.getLayout(BigInteger.valueOf(lineNumber));
-		ClangTextField field = (ClangTextField) layout.getField(0);
+		ClangTextField field =
+			(ClangTextField) provider.getDecompilerPanel().getFields().get(lineNumber);
 
 		int startPos = field.screenLocationToTextOffset(startRow, startColumn);
 		int endPos = field.screenLocationToTextOffset(endRow, endColumn);

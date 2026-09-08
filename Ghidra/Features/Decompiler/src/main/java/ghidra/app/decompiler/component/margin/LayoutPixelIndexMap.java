@@ -37,7 +37,8 @@ public interface LayoutPixelIndexMap {
 	 * viewport. This accounts for scrolling and non-uniform height among the layouts.
 	 * 
 	 * @param index the index of the layout
-	 * @return the top of the layout, relative to the main panel's viewport
+	 * @return the top of the layout, relative to the main panel's viewport, or
+	 * {@code -Integer.MAX_VALUE} if the layout is hidden or not in the viewport
 	 */
 	int getPixel(BigInteger index);
 

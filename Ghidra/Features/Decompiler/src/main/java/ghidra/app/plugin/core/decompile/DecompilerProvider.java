@@ -1273,6 +1273,9 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		addLocalAction(cloneDecompilerAction);
 		addLocalAction(goToNextBraceAction);
 		addLocalAction(goToPreviousBraceAction);
+		for (ScopeFoldingAction.Operation operation : ScopeFoldingAction.Operation.values()) {
+			addLocalAction(new ScopeFoldingAction(operation));
+		}
 
 		graphServiceAdded();
 	}
